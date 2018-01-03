@@ -1,3 +1,5 @@
+#doublely linked 2D - list
+
 class Puzzle():
 	cells = []
 	height = None
