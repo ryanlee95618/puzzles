@@ -1,1 +1,3 @@
 # puzzles
+
+puzzle automation
