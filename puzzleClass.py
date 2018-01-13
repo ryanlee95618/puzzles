@@ -1,3 +1,5 @@
+#this is essentially a doubly linked list extended to 2-dimensions
+
 class Puzzle():
 	cells = []
 	height = None
