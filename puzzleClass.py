@@ -1,5 +1,3 @@
-#doublely linked 2D - list
-
 class Puzzle():
 	cells = []
 	height = None
@@ -10,8 +8,8 @@ class Puzzle():
 		self.height = len(array)
 		self.width = len(array[0])
 		for y, row, in enumerate(array):
-			for x, value in enumerate(row):
-				self.cells.append(Cell(self, value, y, x))
+			for x, element in enumerate(row):
+				self.cells.append(Cell(self, element, y, x))
 
 		for index, cell in enumerate(self.cells):
 
@@ -31,11 +29,23 @@ class Puzzle():
 	def row(self, n):
 		return self.cells[n*self.width:(n+1)*self.width]
 
+	# def columns(self):
+	# 	return [self.column(i) for i in range(self.width)]
+
+	# def rows(self):
+	# 	return [self.row(i) for i in range(self.height)]
+
 	def to_coordinates(self, n):
 		return [n/self.width, n%self.width]
 
 	def to_index(self,y,x):
 		return y*self.width + x
+
+	def index(self,n):
+		return self.cells[n]
+
+	def coord(self,y,x):
+		return self.cells[y*self.width + x]
 
 
 class Cell():
@@ -61,6 +71,8 @@ class Cell():
 
 	def index(self):
 		return self.puzzle.width*self.y + self.x
+
+
 
 # test = [[1,2,3],
 # 		[4,5,6],
