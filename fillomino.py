@@ -1,282 +1,339 @@
+import inspect
+
+from puzzleClass import Puzzle, Cell
+	
 #initiate selenium
 from selenium import webdriver
 browser = webdriver.Chrome()
 
 #open 'root' webpage
-url = 'https://www.brainbashers.com/showfillomino.asp?date=1214&size=8'
-browser.get(url) 
+browser.set_window_position(590, 0)
+url = 'https://www.brainbashers.com/showfillomino.asp?date=0105&size=16'
+url = "https://www.brainbashers.com/showfillomino.asp?date=0112&size=16"
+browser.get(url)
+browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzlediv'))
+check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr/td[2]/p[2]/a[6]")
+
+stop = True
+
+def e():
+	browser.quit()
+
+
+
+class Fillomino_Puzzle(Puzzle):
+
+	groups = []
+	def __init__(self, array):
+
+		#store cells and connect them to each other
+		self.height = len(array)
+		self.width = len(array[0])
+		for y, row, in enumerate(array):
+			for x, value in enumerate(row):
+				self.cells.append(Number_Cell(self, value, y, x))
+
+		for index, cell in enumerate(self.cells):
+
+			y,x = self.to_coordinates(index)
+			if not y == 0:
+				cell.up = self.cells[self.to_index(y-1, x)]
+			if not y == self.height - 1:
+				cell.down = self.cells[self.to_index(y + 1, x)]
+			if not x == self.width - 1:
+				cell.right = self.cells[self.to_index(y, x + 1)]
+			if not x == 0:
+				cell.left = self.cells[self.to_index(y, x - 1)]
+
+		self.calculate_groups()
+
+	#set up groups
+	def calculate_groups(self):
+		for cell in self.cells:
+			if cell.group == None:
+				self.groups.append(Group(self, cell))
+	
+	def delete_group(self, group):
+		del self.groups[self.groups.index(group)]
+
+class Group:
+
+	type = "group"
+
+	def __init__(self, puzzle, starting_cell):
+
+		self.starting_cell = starting_cell
+		self.value = starting_cell.value
+		self.puzzle = puzzle
+		self.calculate_group_cells()
+
+
+	#return list of all cells with same value reachable from starting cell by traveling to adjacent cells of same value
+	#keep track of neighboring cells encoutered.
+	def calculate_group_cells(self):
+
+		explored = [False for cell in self.puzzle.cells]
+		exploration_list = [self.starting_cell]
+		neighbors = []
+
+		group = [self.starting_cell]
+		explored[self.starting_cell.index()] = True
+
+		while len(exploration_list) > 0:
+
+			group_cell = exploration_list.pop()
+
+			for adjacent_cell in group_cell.neighbors():
+
+				if explored[adjacent_cell.index()]:
+					continue
+
+				if adjacent_cell.value == self.value:
+					exploration_list.append(adjacent_cell)
+					group.append(adjacent_cell)
+					explored[adjacent_cell.index()] = True
+
+				else:
+					neighbors.append(adjacent_cell)
+					explored[adjacent_cell.index()] = True
+
+		self.cells = group
+		self.neighbors = neighbors
+		self.size = len(self.cells)
+
+		for cell in self.cells:
+			cell.group = self
+
+	def adjacent_groups(self):
+		groups = []
+		for neighbor in self.neighbors:
+			if not neighbor.group in groups:
+				groups.append(neighbor.group)
+		return groups		
+
+	#return list of groups of white spaces adjacent to group, no repeats 
+	def adjacent_blank_groups(self):
+		return [group for group in self.adjacent_groups() if group.value == None]
+
+		# groups = []
+		# for neighbor in self.neighbors:
+		# 	if neighbor.value == None and not neighbor.group in groups:
+		# 		groups.append(neighbor.group)
+		# return groups
+
+
+	#list of all blank cells that a group can expand into
+	def expansion_space(self):
+		#return [cell for group in [group.cells for group in self.adjacent_blank_groups()] for cell in group]
+		explored = [False for cell in self.puzzle.cells]
+		exploration_list = [self.starting_cell]
+		#neighbors = []
+
+		group = [self.starting_cell]
+		explored[self.starting_cell.index()] = True
+
+		while len(exploration_list) > 0:
+
+			group_cell = exploration_list.pop()
+
+			for adjacent_cell in group_cell.neighbors():
+
+				if explored[adjacent_cell.index()]:
+					continue
+
+				if adjacent_cell.value == self.value or adjacent_cell.value == None:
+					exploration_list.append(adjacent_cell)
+					group.append(adjacent_cell)
+					explored[adjacent_cell.index()] = True
+
+				else:
+					#neighbors.append(adjacent_cell)
+					explored[adjacent_cell.index()] = True
+		return group
+
+
+	def too_large(self):
+		if self.size + 1 == self.value:
+			allowed = []
+			for cell in self.neighbors:
+				if cell.value == None:
+					cell.set_value(self.value, True)
+
+					if not cell.group.size > cell.value:
+						allowed.append(cell)
+
+					cell.set_value(None, True)
+			if len(allowed) == 1:
+				allowed[0].set_value(self.value, False, False)
+
+
+	# def fill_expansion_space(self):
+	# 	blank_cells = self.expansion_space()
+	# 	if len(blank_cells) + self.size == self.value:
+	# 		for cell in blank_cells:
+	# 			cell.set_value(self.value)
+
+	#if group size requirment not yet met and the group has only one neighboring blank cell
+	#set blank cells value to groups value
+	def one_blank_cell_to_expand_to(self, keep_going):
+		if self.value != None and self.size < self.value:
+			blank_neighbors = [cell for cell in self.neighbors if cell.value == None]
+			if len(blank_neighbors) == 1:
+				blank_neighbors[0].set_value(self.value, False, keep_going)
+				return True		
+
+
+	#if group of blank cells has only one neighbor whose hint has not been fufullied
+	#set all blank cells to that neighbor's value
+	def one_possible_value(self):
+		if self.value == None:
+			potential_values = [cell.value for cell in self.neighbors if cell.unfufilled()]
+			if len(set(potential_values)) == 1:
+				for cell in self.cells:
+					cell.set_value(potential_values[0])
+
+
+
+class Number_Cell(Cell):
+	type = "number"
+	def __init__(self, puzzle, value, y, x):
+		try:
+			self.value = int(value)
+		except:
+			self.value = None
+		self.puzzle = puzzle
+		self.y = y
+		self.x = x
+		self.up = None
+		self.down = None
+		self.right = None
+		self.left = None
+		self.group = None
+
+	#only applies to blank cells
+	def set_value(self, value, testing = False, keep_going = True):
+		
+		if not testing:
+			#update html puzzle
+			number_selector[value].click()
+			html_puzzle[self.y][self.x].click()
+
+			# check_button.click()
+			# if browser.find_element_by_id("showtext").find_element_by_tag_name("span").get_attribute("class") == "sred" and stop:
+			# 	print "y:", self.y, "x:", self.x, "v:", value, inspect.stack()[1][3]
+			# 	asdf
+
+		#update puzzle model
+		self.value = value
+
+		for neighbor in self.neighbors():
+			try:
+				group = neighbor.group
+		
+				for cell in group.cells:
+					cell.group = None
+				self.puzzle.delete_group(group)
+				del group
+			except:		
+				pass	
+
+		self.puzzle.calculate_groups()
+
+		if not testing and stop and keep_going:
+			for cell in self.group.neighbors+[self]:
+				cell.group.one_possible_value()
+				#cell.group.one_blank_cell_to_expand_to()
+				cell.test_cut_off()
+
+	#group size requirement has not yet been met
+	def unfufilled(self):
+		return self.group.size != self.value
+
+	#if a blank cell has 2 neighbors with the same value, 
+	#see if joining the 2 neighbors groups would violate group size requirment
+	#if so see if eliminated that option from either of 2 neighbor's group expansions results in changes
+
+	def too_large(self):
+		if self.value != None:
+			return None
+
+		neighbors = [neighbor for neighbor in self.neighbors() if neighbor.value != None]
+
+		for neighborX in neighbors:
+			for neighborY in neighbors:
+				if neighborX != neighborY and neighborX.value == neighborY.value:
+					self.set_value(neighborX.value, True)
+
+					if self.group.size > self.group.value:
+
+						self.set_value(0, True)
+						# for neighbor in neighborX.group.neighbors + neighborY.group.neighbors:
+						# 	neighbor.test_cut_off(False)
+
+
+
+						neighborX.group.one_blank_cell_to_expand_to(False)
+						neighborY.group.one_blank_cell_to_expand_to(False)
+
+		self.set_value(None, True)		
+
+
+			
+
+
+
+ 	def test_cut_off(self, keep_going = True):
+
+		#look at blank cell, temporary set value to "Test" get adjacent blank groups
+		if self.value != None:
+			return
+		self.set_value(10, True)
+
+		#get of small blank space groups
+		blank_groups = [g for g in self.group.adjacent_blank_groups() if g.size < 8]
+
+		for group in blank_groups:
+
+			#find the all neighbors with unfufilled hints of the blank space group
+			unfufilled_neighbors = [cell for cell in group.neighbors if cell != self and cell.unfufilled()]
+
+
+			for unfufilled_neighbor in unfufilled_neighbors:
+				if len(unfufilled_neighbor.group.expansion_space()) < unfufilled_neighbor.value:			
+					self.set_value(unfufilled_neighbor.value, False, keep_going)
+					return True
+
+		
+		for cell in self.neighbors():
+			if cell.value != None and cell.unfufilled():
+				if len(cell.group.expansion_space()) < cell.value:			
+					self.set_value(cell.value, False, keep_going)
+					return True
+
+		else:
+			self.set_value(None, True)
+			return
+
+
+
 
 
 #get puzzle info from webpage
 html_table = browser.find_element_by_id('puzzlediv')
-table_rows = [html_row.find_elements_by_tag_name('td') for html_row in html_table.find_elements_by_tag_name('tr')]
-table_columns = [[row[x] for row in table_rows] for x in range(len(table_rows[1]))]
-puzzle_size = len(table_rows)
+html_puzzle = [html_row.find_elements_by_tag_name('td') for html_row in html_table.find_elements_by_tag_name('tr')]
+table_rows = [[html_cell.text for html_cell in html_row.find_elements_by_tag_name('td')] for html_row in html_table.find_elements_by_tag_name('tr')]
 number_selector = [html_row.find_element_by_tag_name('td') for html_row in browser.find_element_by_id("numberdiv").find_elements_by_tag_name("tr")]
-
-
-def empty(cell):
-	return cell.text == ""
-
-def value(cell):
-	return cell.text
-
-#determine if a numbered cell can expand (its group size requirement has not yet been met)
-def can_expand(cell):
-	return cell.get_attribute("style") == "background-color: rgb(255, 255, 255);" and not empty(cell)
-
-
-
-#return list of adjacent cell coordinates within puzzle boarder
-def adjacent_coordinates(y, x):
-	short_list = [[y, x + 1], [y, x - 1], [y + 1, x], [y - 1, x]]
-	return [[y_prime, x_prime] for y_prime, x_prime in short_list if 0 <= x_prime <= (puzzle_size - 1) and 0 <= y_prime <= (puzzle_size - 1)]
-	
-#make a  test verison of puzzle to be modified for interconnectedness testing
-def make_puzzle():
-	return  [[html_cell.text for html_cell in  html_row.find_elements_by_tag_name('td')] for html_row in html_table.find_elements_by_tag_name('tr')]
-
-def print_puzzle(puzzle):
-	for row in puzzle:
-		print " ".join(row)
-	print "\n"
-
-#change cell to specified value
-def click(cell, n):
-	number_selector[n].click()
-	cell.click()
-
-#calculate current group size of a cell
-def group_size(y_start, x_start):
-	puzzle = make_puzzle()
-	number = puzzle[y_start][x_start]
-
-	exploration_list = [[y_start, x_start]]
-	size = 1
-	while len(exploration_list) > 0:
-
-		y,x = exploration_list.pop()
-		puzzle[y][x] = 'explored'
-
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-			if puzzle[y_prime][x_prime] == number:
-				exploration_list.append(coordinate)
-				size += 1
-	return size
-
-
-
-#look for non-empty cells that are expandable. 'fill' all adjacent reachable cells of the same value
-#keep track of number of adjacent blank cells encountered. if there is only one, change blank cell to value
-def one_option(y_start,x_start):
-
-	puzzle = make_puzzle()
-	number = puzzle[y_start][x_start]
-	exploration_list = [[y_start, x_start]]
-	blank_cell_locations = []
-
-	while len(exploration_list) > 0:
-
-		y,x = exploration_list.pop()
-		puzzle[y][x] = 'explored'
-
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-			if puzzle[y_prime][x_prime] == number:
-				exploration_list.append(coordinate)
-			elif puzzle[y_prime][x_prime] == "":
-				puzzle[y_prime][x_prime] = "blank_found" 
-				blank_cell_locations.append(coordinate)
-
-	if len(blank_cell_locations) == 1:
-		#change blank cell to number
-		y_blank, x_blank = blank_cell_locations[0]
-		click(table_rows[y_blank][x_blank], int(number))
-
-
-for y, row in enumerate(table_rows):
-	for x, cell in enumerate(row):
-		if not empty(cell):
-			if can_expand(cell):
-				one_option(y, x)
-
-
-#look for non-empty cells that are expandable. for each adjacent white cell 'fill' other reachable white cells.
-#keep track of expandable adjacent cells. if there are none, fill every white cell encountered with the current cell value. 
-
-
-
-
-
-
-
-
-#look for non-empty cells that are expandable. calculate the maximum number cells a the current cell could expand into. If the maximum plus the number of cells in the group size is equal to the value, then fill all white cells encountered.
-def max_space(y_start,x_start):
-
-
-	#find all whites space that is adjacent to the group of the start cell. 	
-	puzzle = make_puzzle()
-	number = puzzle[y_start][x_start]
-
-	exploration_list = [[y_start, x_start]]
-	adjacent_blank_cells = []
-	while len(exploration_list) > 0:
-
-		y,x = exploration_list.pop()
-		puzzle[y][x] = 'explored'
-
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-			if puzzle[y_prime][x_prime] == number:
-				exploration_list.append(coordinate)
-
-			elif puzzle[y_prime][x_prime] ==  '':
-				adjacent_blank_cells.append(coordinate)
-
-
-
-	#'fill' the list of white space to find the most cells the current group could fill.	
-	puzzle = make_puzzle()
-
-	white_cell_list = list(adjacent_blank_cells)
-	while len(adjacent_blank_cells) > 0:
-
-		y,x = adjacent_blank_cells.pop()
-		if puzzle[y][x] == 'explored':
-			continue
-
-		puzzle[y][x] = 'explored'
-
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-			if puzzle[y_prime][x_prime] ==  '':
-				adjacent_blank_cells.append(coordinate)
-
-				if not coordinate in white_cell_list:
-					white_cell_list.append(coordinate)
-
-	print white_cell_list
-	if len(white_cell_list) + group_size(y_start, x_start) == int(number):
-
-		for y,x in white_cell_list:
-			click(table_rows[y][x], int(number))
-
-
-
-for y, row in enumerate(table_rows):
-	for x, cell in enumerate(row):
-		if not empty(cell):
-			if can_expand(cell):
-				max_space(y, x)
-
-
-
-	#keep track of which cells have been explored
-	#explored = [ [0]*puzzle_size for _ in xrange(puzzle_size)]
-
-
-
-
-
-
-
-
-asdf
-
-
-
-
-
-
-
-
-
-
-
-def change_state(y, x, cell_color):
-
-	cell = table_rows[y][x]
- 
-	#make sure cell value has not already been changed
-	if color(cell) != "grey":
-		return None
-
-	#when changing state of a cell to white, change all other cells in the same column and row with the same value to black
-	if cell_color == "white":
-		cell.click()
-
-		#check cells in same row
-		for cell_index, cell2 in enumerate(table_rows[y]):
-			if value(cell2) == value(cell):
-				change_state(y, cell_index, "black")
-		
-		#check cells in same column
-		for cell_index, cell2 in enumerate(table_columns[x]):
-			if value(cell2) == value(cell):
-				change_state(cell_index, x, "black")
-
-	#when changing a cell to black, change 4 adjacent cells to white.
-	elif cell_color == "black":
-		cell.click()
-		cell.click()
-
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-			change_state(y_prime, x_prime, "white")
-
-#single whites cells cannot be enclosed by black cells
-for y, row in enumerate(table_rows):
-	for x, cell in enumerate(row):
-		if color(cell) != "white":
-			continue
-		
-		#keep track of how many grey neighbors the current cell has
-		grey_neighbor_coordinates = []
-		white_neighbor_coordinates = []
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-
-			if color(table_rows[y_prime][x_prime]) == "grey":
-				grey_neighbor_coordinates.append([y_prime, x_prime])
-			if color(table_rows[y_prime][x_prime]) == "white":
-				white_neighbor_coordinates.append([y_prime,x_prime])
-
-		#if there is one grey neighbor and no white neighbors, the only way for the current cell to be connected to the rest of the puzzle is through the one grey neighbor, so change that neighbor to white.
-		if len(grey_neighbor_coordinates) == 1 and len(white_neighbor_coordinates) == 0:
-			y_alpha, x_alpha = grey_neighbor_coordinates[0]
-			change_state(y_alpha, x_alpha, "white")
-
-
-
-
-#start at a white cell, and fill every other white cell that is reachable. keep track of number of neihboring grey cells encountered. if there is only one encountered, then that is the only way for the reachable white cells to be connected to the rest of the puzzle, so change grey cell to white.
-def explore(y_start, x_start, puzzle):
-
-	exploration_list = [[y_start, x_start]]
-	grey_cell_locations = []
-
-	while len(exploration_list) > 0: #and len(grey_cell_locations) < 2:
-
-		y,x = exploration_list.pop()
-		puzzle[y][x] = 'explored'
-
-		for coordinate in adjacent_coordinates(y,x):
-			y_prime, x_prime = coordinate
-			if puzzle[y_prime][x_prime] == "white":
-				exploration_list.append(coordinate)
-			elif puzzle[y_prime][x_prime] == "grey":
-				puzzle[y_prime][x_prime] = "grey_found" 
-				grey_cell_locations.append(coordinate)
-
-	if len(grey_cell_locations) == 1:
-		#change grey cell to white
-		y_grey, x_grey = grey_cell_locations[0]
-		change_state(y_grey, x_grey, "white")
-		print_puzzle(puzzle)
-
-
-
-
-
+puzzle = Fillomino_Puzzle(table_rows)
+
+
+i = 0
+while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i<20:
+	print i
+	for cell in puzzle.cells:
+		cell.test_cut_off()
+		cell.too_large()
+		cell.group.one_possible_value()
+		cell.group.too_large()
+	i+=1
+
+print i
