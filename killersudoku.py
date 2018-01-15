@@ -187,6 +187,7 @@ class Number_Cell(Cell):
 				if cell != self:
 					cell.delete_value(self.value)
 
+
 integers = [1,2,3,4,5,6,7,8,9]
 def sum_to2(total, N, integer_list = integers):
 

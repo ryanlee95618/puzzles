@@ -8,7 +8,7 @@ browser = webdriver.Chrome()
 #open 'root' webpage
 browser.set_window_position(750, 0)
 browser.set_window_size(600, 735)
-url = 'https://www.brainbashers.com/showslitherlink.asp?date=0114&diff=1&size=10'
+url = 'https://www.brainbashers.com/showslitherlink.asp?date=0115&diff=1&size=15'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzleContainer'))
 check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr/td/p[4]/a[6]")
@@ -54,42 +54,6 @@ class Slither_Puzzle(Puzzle):
 			if not x == 0:
 				cell.left = self.cells[self.to_index(y, x - 1)]
 
-
-
-
-	# 	for cell in self.cells:
-	# 		if cell and cell.type == "hint":
-	# 			y,x = cell.y, cell.x
-	# 			#if cell.y % 2 == 0:
-	# 				#connect cell left and right to number cells
-	# 			self.connect(y, x, y, x-1)
-	# 			self.connect(y, x, y, x+1)
-	# 			#elif cell.x % 2 == 0:
-	# 				#connect cell up and down to number cells
-	# 			self.connect(y, x, y + 1, x)
-	# 			self.connect(y, x, y - 1, x)
-
-
-	# def connect(self, y1, x1, y2, x2):
-	# 	cell_1 = self.cells[self.to_index(y1,x1)]
-	# 	cell_2 = self.cells[self.to_index(y2,x2)]
-
-	# 	if y1 == y2:
-	# 		if x1 > x2:
-	# 			cell_1.left = cell_2
-	# 			cell_2.right = cell_1				
-	# 		else:
-	# 			cell_1.right = cell_2
-	# 			cell_2.left = cell_1				
-	# 	elif x1 == x2:
-	# 		if y1 > y2:
-	# 			cell_1.up = cell_2
-	# 			cell_2.down = cell_1
-	# 		else:
-	# 			cell_1.down = cell_2
-	# 			cell_2.up = cell_1
-
-
 class Link(Cell):
 	type = "link"
 	def __init__(self, puzzle, html_cell, y, x):
@@ -114,11 +78,18 @@ class Link(Cell):
 				html_puzzle[self.y][self.x].click()
 				html_puzzle[self.y][self.x].click()
 
+			for n in self.neighbors():
+				if not n.done:
+					n.check()
+
 			# check_button.click()
 			# if browser.find_element_by_id("showtext").find_element_by_tag_name("span").get_attribute("class") == "sred":
 			# 	print "y:", self.y, "x:", self.x, "v:", state, inspect.stack()[1][3]
 			# 	asdf
-
+	def check_closed_loop(self):
+		intersection1, intersection2 = [n for n in self.neighbors() if n.type == "intersection"]
+		if intersection1 in intersection2.explore():
+			self.set_state(False)
 
 class Intersection(Cell):
 	type = "intersection"
@@ -166,6 +137,44 @@ class Intersection(Cell):
 				n_of_Nones += 1
 		return [n_of_Trues, n_of_Falses, n_of_Nones]
 
+	def connected_neighbors(self):
+		output = []
+		if self.up and self.up.state == True:
+			output.append(self.up.up)
+		if self.right and self.right.state == True:
+			output.append(self.right.right)
+		if self.down and self.down.state == True:
+			output.append(self.down.down)
+		if self.left and self.left.state == True:
+			output.append(self.left.left)
+		return output
+
+
+	def explore(self):
+		explored = [False for cell in self.puzzle.cells]
+		exploration_list = [self]
+
+		network = [self]
+		explored[self.index()] = True
+
+		while len(exploration_list) > 0:
+
+			network_cell = exploration_list.pop()
+
+			for connected_cell in network_cell.connected_neighbors():
+
+				if explored[connected_cell.index()]:
+					continue
+
+				exploration_list.append(connected_cell)
+				network.append(connected_cell)
+				explored[connected_cell.index()] = True
+
+		return network
+
+
+
+
 
 
 class Hint_Cell(Cell):
@@ -199,6 +208,9 @@ class Hint_Cell(Cell):
 		return [n_of_Trues, n_of_Falses, n_of_Nones]
 
 	def check(self):
+		if self.value == "":
+			return
+
 		n_of_Trues, n_of_Falses, n_of_Nones = self.tally()
 
 		if n_of_Trues + n_of_Nones == int(self.value):
@@ -217,6 +229,10 @@ class Hint_Cell(Cell):
 				if link.state == None:
 					link.set_state(True)
 
+	def threes(self):
+		if self.value == "3":
+			pass
+
 
 #get puzzle info from webpage
 html_table = browser.find_element_by_id('slitherlinkdiv')
@@ -225,7 +241,34 @@ puzzle = Slither_Puzzle(html_puzzle)
 
 
 
+#check if making a corner would elminiate too many possibilities
+
+
 #find diagonally adjacent 3's
+coords = []
+for c in puzzle.cells:
+	if c.type == 'hint' and c.value == "3":
+		coords.append([c.y,c.x])
+
+for index, coord1 in enumerate(coords[:-1]):
+	y1,x1 = coord1
+	for y2,x2 in coords[index+1:]:
+		if abs(y2-y1) == 2 and abs(x2-x1) == 2:
+			cell1 = puzzle.coord(y1,x1)
+			cell2 = puzzle.coord(y2,x2)
+			if y1 > y2:
+				cell1.down.set_state(True)
+				cell2.up.set_state(True)
+			else:
+				cell2.down.set_state(True)
+				cell1.up.set_state(True)
+
+			if x1 > x2:
+				cell1.right.set_state(True)
+				cell2.left.set_state(True)
+			else:
+				cell2.right.set_state(True)
+				cell1.left.set_state(True)
 
 
 
@@ -238,6 +281,9 @@ for c in puzzle.cells:
 			c.down.set_state(True)
 			try:
 				c.up.right.right.set_state(False)
+			except:
+				pass
+			try:
 				c.up.left.left.set_state(False)
 			except:
 				pass
@@ -248,6 +294,9 @@ for c in puzzle.cells:
 			c.right.right.right.set_state(True)
 			try:
 				c.right.up.up.set_state(False)
+			except:
+				pass
+			try:
 				c.right.down.down.set_state(False)
 			except:
 				pass
@@ -255,24 +304,16 @@ for c in puzzle.cells:
 
 
 
-for c in puzzle.cells:
-	if c.type == 'hint' and c.value != "":
-		c.check()
-	if c.type == 'intersection':
-		c.check()
 
-# puzzle.coord(4,1).set_state(False)
+i = 0
+while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i<10:
+	for c in puzzle.cells:
+		if c.type == 'hint' and c.value != "" and not c.done:
 
-# for n in puzzle.coord(2,2).neighbors()[-3:-1]:
-# 	n.set_state(True)
-
-# for n in puzzle.coord(3,3).neighbors()[1:2]:
-# 	n.set_state(True)
-
-
-# i = 0
-# while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i<20:
-# 	for c in puzzle.cells:
-# 		pass
-# 	i+=1
-# print i
+			c.check()
+		if c.type == 'intersection' and not c.done:
+			c.check()
+		if c.type == "link":
+			c.check_closed_loop()
+	i+=1
+print i
