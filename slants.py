@@ -5,7 +5,7 @@ browser = webdriver.Chrome()
 
 #open 'root' webpage
 browser.set_window_position(320, 0)
-url = 'https://www.brainbashers.com/showslant.asp?date=0111&size=15x12'
+url = 'https://www.brainbashers.com/showslant.asp?date=0117&size=15x12'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('slanttable'))
 

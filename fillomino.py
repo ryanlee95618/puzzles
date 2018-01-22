@@ -1,5 +1,6 @@
 import inspect
 
+import time
 from puzzleClass import Puzzle, Cell
 	
 #initiate selenium
@@ -9,7 +10,7 @@ browser = webdriver.Chrome()
 #open 'root' webpage
 browser.set_window_position(590, 0)
 url = 'https://www.brainbashers.com/showfillomino.asp?date=0105&size=16'
-url = "https://www.brainbashers.com/showfillomino.asp?date=0112&size=16"
+url = "https://www.brainbashers.com/showfillomino.asp?date=0122&size=16"
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzlediv'))
 check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr/td[2]/p[2]/a[6]")
@@ -132,7 +133,7 @@ class Group:
 		group = [self.starting_cell]
 		explored[self.starting_cell.index()] = True
 
-		while len(exploration_list) > 0:
+		while len(exploration_list) > 0 and len(group) < 9:
 
 			group_cell = exploration_list.pop()
 
@@ -307,7 +308,7 @@ class Number_Cell(Cell):
 		for cell in self.neighbors():
 			if cell.value != None and cell.unfufilled():
 				if len(cell.group.expansion_space()) < cell.value:			
-					self.set_value(cell.value, False, keep_going)
+					self.set_value(cell.value, False, True)
 					return True
 
 		else:
@@ -323,8 +324,12 @@ html_table = browser.find_element_by_id('puzzlediv')
 html_puzzle = [html_row.find_elements_by_tag_name('td') for html_row in html_table.find_elements_by_tag_name('tr')]
 table_rows = [[html_cell.text for html_cell in html_row.find_elements_by_tag_name('td')] for html_row in html_table.find_elements_by_tag_name('tr')]
 number_selector = [html_row.find_element_by_tag_name('td') for html_row in browser.find_element_by_id("numberdiv").find_elements_by_tag_name("tr")]
+
+import_start = int(round(time.time() * 1000))
+
 puzzle = Fillomino_Puzzle(table_rows)
 
+import_end  = int(round(time.time() * 1000))
 
 i = 0
 while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i<20:
@@ -333,7 +338,19 @@ while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 an
 		cell.test_cut_off()
 		cell.too_large()
 		cell.group.one_possible_value()
-		cell.group.too_large()
+		# cell.group.too_large()
 	i+=1
 
 print i
+
+solve_end = int(round(time.time() * 1000))
+
+import_time = import_end - import_start
+run_time = solve_end - import_end
+
+print "import:", import_time
+print "run:", run_time
+
+
+# import: 10
+# run: 52363

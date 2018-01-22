@@ -7,7 +7,7 @@ browser = webdriver.Chrome()
 
 #open 'root' webpage
 browser.set_window_position(650, 0)
-url = 'https://www.brainbashers.com/showlightup.asp?date=0112&diff=Medium&size=20'
+url = 'https://www.brainbashers.com/showlightup.asp?date=0120&diff=Hard&size=20'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzlediv'))
 check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr[3]/td/p[2]/a[6]")
