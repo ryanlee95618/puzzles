@@ -1,191 +1,160 @@
+from puzzleClass import Puzzle, Cell
+
 #initiate selenium
 from selenium import webdriver
 browser = webdriver.Chrome()
 
 #open 'root' webpage
-url = 'https://www.brainbashers.com/show3inarow.asp?date=1207&diff=1&size=10'
+browser.set_window_position(650, 0)
+url = 'https://www.brainbashers.com/show3inarow.asp?date=0126&diff=2&size=18'
 browser.get(url) 
-
-table = [[html_cell for html_cell in html_row.find_elements_by_tag_name('td')[:-1]] for html_row in browser.find_element_by_id('puzzlediv').find_elements_by_tag_name('tr')[1:]]
-
-
-def isWhite(cell):
-	return cell.get_attribute('class').find('white')>-1
-def isBlack(cell):
-	return cell.get_attribute('class').find('black')>-1
+browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzlediv'))
+check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr[2]/td/p[2]/a[6]")
 
 
-#check if two cells are same color
-def are_the_same_color(a,b):
+def e():
+	browser.quit()
 
-	if isBlack(a) and isBlack(b):
-		return 'black'
-	elif isWhite(a) and isWhite(b):
-		return 'white'
-	else:
-		return None
+
+class Threes_Puzzle(Puzzle):
+
+	def __init__(self, array):
+
+		#store cells and connect them to each other
+		self.height = len(array)
+		self.width = len(array[0])
+		self.size = self.height
+		for y, row, in enumerate(array):
+			for x, element in enumerate(row):
+				self.cells.append(Number_Cell(self, element, y, x))
+		for index, cell in enumerate(self.cells):
+			y,x = self.to_coordinates(index)
+			if not y == 0:
+				cell.up = self.cells[self.to_index(y-1, x)]
+			if not y == self.height - 1:
+				cell.down = self.cells[self.to_index(y + 1, x)]
+			if not x == self.width - 1:
+				cell.right = self.cells[self.to_index(y, x + 1)]
+			if not x == 0:
+				cell.left = self.cells[self.to_index(y, x - 1)]
+
+	def scan_row(self):
+
+		for row in self.rows() + self.columns():
+			number_of_blacks, number_of_whites, _ = self.count_colors(row)
+
+			if number_of_blacks == self.size/2:
+				for cell in row:
+					if cell.state == None:
+						cell.set_state("white")
+			elif number_of_whites == self.size/2:
+				for cell in row:
+					if cell.state == None:
+						cell.set_state("black")
+
+
+			elif number_of_blacks == (self.size/2 - 1):
+				for cell in row:
+					if cell.state == None:
+						for group_of_three in self.groups_of_three(row):
+							if cell not in group_of_three:
+								number_of_blacks, number_of_whites, number_of_blanks = self.count_colors(group_of_three)
+								if number_of_whites + number_of_blanks == 3:
+									cell.set_state("white")
+						
+			elif number_of_whites == (self.size/2 - 1):
+				for cell in row:
+					if cell.state == None:
+						for group_of_three in self.groups_of_three(row):
+							if cell not in group_of_three:
+								number_of_blacks, number_of_whites, number_of_blanks = self.count_colors(group_of_three)
+								if number_of_blacks + number_of_blanks == 3:
+									cell.set_state("black")
 	
-
-def click_value(string,x,y):
-	if string == 'white':
-		print 'CLICK'
-		table[y][x].click()
-	elif string == 'black':
-		print 'CLICK'
-		table[y][x].click()
-		table[y][x].click()
-	else:
-		pass
+	#return groups of 3 consectuive cells
+	def groups_of_three(self, cell_list):
+		output = []
+		for index, cell in enumerate(cell_list[1:-1]):
+			output.append([cell_list[index], cell, cell_list[index+2]])
+		return output
 
 
-puzzle_height = len(table)
-puzzle_width = len(table[1])
+	def count_colors(self, cell_list):
+		n_of_white = 0
+		n_of_black = 0
+		n_of_blank = 0
 
-#iterate over every cell and check 2 cells above, below, right, and left to see if they are repeated.
-def scan():
-	for x in range(puzzle_width):
-		for y in range(puzzle_height):
-			if table[y][x].get_attribute('class').find('grey')>-1:
-				
-				#check for repeats above
-				if y >= 2:
-					same_value = are_the_same_color(table[y-1][x], table[y-2][x])
-					click_value(same_value,x,y)
+		for cell in cell_list:
+			if cell.state == "white":
+				n_of_white += 1
+			elif cell.state == "black":
+				n_of_black += 1
+			else:
+				n_of_blank += 1
+		return [n_of_black, n_of_white, n_of_blank]
 
-				#check for repeats below
-				if y <= puzzle_height-3:
-					same_value = are_the_same_color(table[y+1][x], table[y+2][x])
-					click_value(same_value,x,y)			
-					
-				#check for repeats right
-				if x <= puzzle_width-3:
-					same_value = are_the_same_color(table[y][x+1], table[y][x+2])
-					click_value(same_value,x,y)
+	def scan(self):
+		for row in self.rows() + self.columns():
 
-				#check for repeats left
-				if x >= 2:
-					same_value = are_the_same_color(table[y][x-1], table[y][x-2])
-					click_value(same_value,x,y)
+			for group_of_three in self.groups_of_three(row):
+
+				number_of_blacks, number_of_whites, number_of_blanks = self.count_colors(group_of_three)
+
+				if number_of_whites == 2 and number_of_blanks == 1:
+					[c for c in group_of_three if c.state == None][0].set_state("black")
+				elif number_of_blacks == 2 and number_of_blanks == 1:
+					[c for c in group_of_three if c.state == None][0].set_state("white")
 
 
+class Number_Cell(Cell):
+	def __init__(self, puzzle, html_cell, y, x):
 
-
-
-
-
-
-
-
-def click_cell(string, cell):
-	if cell.get_attribute('class').find('grey')>-1:
-		if string == 'white':
-			cell.click()
-			print 'CLICK'
-		elif string == 'black':
-			cell.click()
-			cell.click()
-			print 'CLICK'
+		if html_cell.get_attribute('class').find('black')>-1:
+			self.state = 'black'
+		elif html_cell.get_attribute('class').find('white')>-1:
+			self.state = 'white'
 		else:
-			pass
+			self.state = None
 
+		self.puzzle = puzzle
+		self.y = y
+		self.x = x
+		self.up = None
+		self.down = None
+		self.right = None
+		self.left = None
 
-#look at every group of 3 cells, if 2 are the same, if in the 3rd (if it is grey) with the opposite color
-def scan2():
-	puzzle_height = len(table)
-	puzzle_width = len(table[1])
+	#only applies to blank cells
+	def set_state(self, state):
 
-	for x in range(puzzle_width):
-		for y in range(puzzle_height):
+		if self.state != None:
+			return
 
-			if x < puzzle_width - 2:
-			#3 cells to the right (including current cell)
-				A,B,C = [table[y][x],table[y][x+1],table[y][x+2]]
-				#print A.get_attribute('class'), B.get_attribute('class'), C.get_attribute('class')
-				click_cell(are_the_same_color(A,B),C)
-				click_cell(are_the_same_color(B,C),A)
-				click_cell(are_the_same_color(A,C),B)
-			if y < puzzle_height - 2:
-			#3 cells below (including current cell)
-				A,B,C = [table[y][x],table[y+1][x],table[y+2][x]]
-				click_cell(are_the_same_color(A,B),C)
-				click_cell(are_the_same_color(B,C),A)
-				click_cell(are_the_same_color(A,C),B)
+		self.state = state
 
-
-
-
-
-
-#check for row/columns with only one remaining color to fill
-def almost_full():
-	#scan rows
-	for x in range(puzzle_height):
-		row = table[x]
-		white_count = sum([isWhite(cell) for cell in row])
-		black_count = sum([isBlack(cell) for cell in row])
-
-		if white_count == puzzle_width/2:
-			for cell in row:
-				click_cell('white', cell)
-		elif black_count == puzzle_width/2:
-			for cell in row:
-				click_cell('black', cell)
-
-	#scan columns
-	for y in range(puzzle_width):
-		column = [row[y] for row in table]
-		white_count = sum([isWhite(cell) for cell in column])
-		black_count = sum([isBlack(cell) for cell in column])
-
-		if white_count == puzzle_height/2:
-			for cell in column:
-				click_cell('white', cell)
-		elif black_count == puzzle_height/2:
-			for cell in column:
-				click_cell('black', cell)
-
-#when a change is made to a cell, check all groups of 3 that contain the cell.
-def check_cell(cell):
-	pass
 	
+		if state == "black":
+			html_puzzle[self.y][self.x].click()
+		else: #state == "white"
+			html_puzzle[self.y][self.x].click()
+			html_puzzle[self.y][self.x].click()
 
 
+		# check_button.click()
+		# if browser.find_element_by_id("showtext").find_element_by_tag_name("span").get_attribute("class") == "sred":
+		# 	print "y:", self.y, "x:", self.x, "v:", state, inspect.stack()[1][3]
+		# 	asdf
+
+html_puzzle = [[html_cell for html_cell in html_row.find_elements_by_tag_name('td')[:-1]] for html_row in browser.find_element_by_id('puzzlediv').find_elements_by_tag_name('tr')[1:]]
+puzzle = Threes_Puzzle(html_puzzle)
 
 
-for i in range(10):
-	scan2()
-	almost_full()
-	print i
-	try:
-		browser.find_element_by_class_name('sgreen')
-		print "DONE!!!!!!!"
-		break
-	except:
-		pass
+i = 1
+while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i < 20:
+	
+	puzzle.scan()
+	puzzle.scan_row()
+	i+=1
 
-
-
-# for row in table:
-# 	previous_cell = " "
-# 	repeat_found = False
-# 	for cell in row:
-# 		if repeat_found:
-# 			pass
-# 		if cell.get_attribute('class').find(previous_cell) > -1:
-# 			pass
-# 		previous_cell = cell.get_attribute('class')
-
-
-
-
-# =[[u'inarowgrey', u'inarowfixedblack', u'inarowgrey', u'inarowgrey', u'inarowgrey', u'inarowgrey'], [u'inarowgrey', u'inarowfixedblack', u'inarowgrey', u'inarowgrey', u'inarowfixedblack', u'inarowgrey'], [u'inarowgrey', u'inarowgrey', u'inarowgrey', u'inarowfixedwhite', u'inarowgrey', u'inarowgrey'], [u'inarowgrey', u'inarowfixedblack', u'inarowfixedblack', u'inarowgrey', u'inarowfixedblack', u'inarowgrey'], [u'inarowgrey', u'inarowgrey', u'inarowgrey', u'inarowgrey', u'inarowgrey', u'inarowgrey'], [u'inarowgrey', u'inarowgrey', u'inarowgrey', u'inarowfixedwhite', u'inarowgrey', u'inarowfixedwhite']]
-
-
-
-# #inarowfixedwhite inarowwhite
-# if cell_state == "inarowblack":
-# 	pass
-# elif cell_state == "inarowgrey":
-# 	html_cell.click()
-# elif cell_state == "inarowwhite":
-# 	pass
+if browser.find_element_by_id("showtext").text.find("Puzzle Solved") > -1:
+	e()
