@@ -8,7 +8,7 @@ browser = webdriver.Chrome()
 #open 'root' webpage
 browser.set_window_position(750, 0)
 browser.set_window_size(600, 735)
-url = 'https://www.brainbashers.com/showslitherlink.asp?date=0115&diff=1&size=15'
+url = 'https://www.brainbashers.com/showslitherlink.asp?date=0131&diff=3&size=10'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzleContainer'))
 check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr/td/p[4]/a[6]")
@@ -28,17 +28,13 @@ class Slither_Puzzle(Puzzle):
 			for x, element in enumerate(row):
 				if y % 2 == 1:
 					if x % 2 == 1:
-						#its a number cell
 						self.cells.append(Hint_Cell(self, element, y, x))
 					else:
-						#relation type cell
 						self.cells.append(Link(self, element, y, x))
 				else:
 					if x % 2 == 1:
-						#relation type cell
 						self.cells.append(Link(self, element, y, x))
 					else:
-						#None
 						self.cells.append(Intersection(self,element, y, x))
 
 		#connect cells
@@ -91,10 +87,10 @@ class Link(Cell):
 		if intersection1 in intersection2.explore():
 			self.set_state(False)
 
+
 class Intersection(Cell):
 	type = "intersection"
 	
-
 	def __init__(self, puzzle, html_cell, y, x):
 		self.done = False
 		self.puzzle = puzzle
@@ -136,6 +132,19 @@ class Intersection(Cell):
 			else:
 				n_of_Nones += 1
 		return [n_of_Trues, n_of_Falses, n_of_Nones]
+
+	def sort(self):
+		Trues = []
+		Falses = []
+		Nones = []
+		for link in self.neighbors():
+			if link.state == True:
+				Trues.append(link)
+			elif link.state == False:
+				Falses.append(link)
+			else:
+				Nones.append(link)
+		return [Trues, Falses, Nones]
 
 	def connected_neighbors(self):
 		output = []
@@ -229,9 +238,133 @@ class Hint_Cell(Cell):
 				if link.state == None:
 					link.set_state(True)
 
+	def intersections(self):
+		return [self.right.up, self.right.down, self.left.down, self.left.up]
+
+
+	def outer_inner_links(self):
+		output = {}
+		for intersection_index, intersection in enumerate(self.intersections()):
+			inside_links = {None: [], True: [], False: []}
+			outside_links = {None: [], True: [], False: []}
+			for link in intersection.neighbors():
+				if link in self.neighbors():
+					inside_links[link.state].append(link)
+				else:
+					outside_links[link.state].append(link)
+			output[intersection_index]= {"inside_links": inside_links, "outside_links": outside_links}
+		return output
+
+	#a[0]['inside_links'][None][0]
+# intersection index 0 outer links indices: 0,1 inner: 23
+# intersection index 1 outer links indices: 1,2 inner: 30
+# intersection index 2 outer links indices: 2,3 inner: 01
+# intersection index 3 outer links indices: 3,4 inner: 
+
+	def multi_hint_check(self):
+
+		if self.value == "":
+			return
+
+		intersections = self.outer_inner_links()
+		for index in intersections:
+			outer_trues = intersections[index]["outside_links"][True]
+			outer_nones = intersections[index]["outside_links"][None]
+
+			if self.value == "1":
+
+				if len(intersections[index]["outside_links"][True]) == 1 and len(intersections[index]["outside_links"][None]) == 0:
+					for link in intersections[(index+2)%4]["inside_links"][None]:
+						link.set_state(False)
+
+
+				elif len(intersections[index]["outside_links"][True]) == 0 and len(intersections[index]["outside_links"][None]) == 0:
+					for link in intersections[(index)]["inside_links"][None]:
+						link.set_state(False)
+
+			elif self.value == "2":
+
+				if len(intersections[index]["outside_links"][True]) == 1 and len(intersections[index]["outside_links"][None]) == 0:
+
+					if len(intersections[(index+2)%4]["inside_links"][True]) == 1:
+						for link in intersections[(index+2)%4]["inside_links"][None]:
+							link.set_state(False)
+
+					elif len(intersections[(index+2)%4]["inside_links"][False]) == 1:
+						for link in intersections[(index+2)%4]["inside_links"][None]:
+							link.set_state(True)
+
+				elif len(intersections[index]["inside_links"][True]) == 1 and len(intersections[index]["inside_links"][None]) == 0:
+
+					if len(intersections[(index+2)%4]["outside_links"][True]) == 1:
+						for link in intersections[(index+2)%4]["outside_links"][None]:
+							link.set_state(False)
+
+
+				elif len(intersections[index]["outside_links"][True]) == 1 and len(intersections[(index+2)%4]["outside_links"][True]) == 1:
+					for link in intersections[index]["outside_links"][None]:
+							link.set_state(False)
+
+				elif len(intersections[index]["outside_links"][True]) == 1 and len(intersections[(index+2)%4]["inside_links"][False]) == 1:
+					for link in intersections[index]["outside_links"][None]:
+							link.set_state(False)
+
+
+
+				
+			elif self.value == "3":
+				if len(intersections[index]["outside_links"][True]) == 1:
+					for link in intersections[(index+2)%4]["inside_links"][None]:
+						link.set_state(True)
+
+				elif len(intersections[index]["outside_links"][True]) == 0 and len(intersections[index]["outside_links"][None]) == 0:
+					for link in intersections[(index)]["inside_links"][None]:
+						link.set_state(True)
+
+
+
+
+
+
+
+
 	def threes(self):
 		if self.value == "3":
-			pass
+			for index, intersection in enumerate(self.intersections()):
+				Trues, Falses, Nones = intersection.sort()
+				if len(Trues) == 1:
+					if Trues[0] not in self.neighbors():
+						self.neighbors()[(index-1)%4].set_state(True)
+				 		self.neighbors()[(index+2)%4].set_state(True)
+
+				outer_links = [link for link in intersection.neighbors() if link not in self.neighbors()]
+
+				if len([link for link in outer_links if link.state == True]) == 0 and len([link for link in outer_links if link.state == None]) == 0:
+					self.neighbors()[(index-3)%4].set_state(True)
+				 	self.neighbors()[(index)%4].set_state(True)
+
+		elif self.value == "1":
+			for index, intersection in enumerate(self.intersections()):
+
+				outer_links = [link for link in intersection.neighbors() if link not in self.neighbors()]
+
+				if len([link for link in outer_links if link.state == True]) == 1 and len([link for link in outer_links if link.state == None]) == 0:
+					self.neighbors()[(index-1)%4].set_state(False)
+				 	self.neighbors()[(index+2)%4].set_state(False)
+
+				if len([link for link in outer_links if link.state == True]) == 0 and len([link for link in outer_links if link.state == None]) == 0:
+					self.neighbors()[(index-3)%4].set_state(False)
+				 	self.neighbors()[(index)%4].set_state(False)
+		
+
+	#300
+	#3 1
+	#221	 		
+
+
+
+
+
 
 
 #get puzzle info from webpage
@@ -309,6 +442,8 @@ i = 0
 while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i<10:
 	for c in puzzle.cells:
 		if c.type == 'hint' and c.value != "" and not c.done:
+			# c.threes()
+			c.multi_hint_check()
 
 			c.check()
 		if c.type == 'intersection' and not c.done:
@@ -317,3 +452,4 @@ while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 an
 			c.check_closed_loop()
 	i+=1
 print i
+
