@@ -9,7 +9,7 @@ browser = webdriver.Chrome()
 
 #open webpage
 browser.set_window_position(750, 0)
-url = 'https://www.brainbashers.com/shownetwork.asp?date=0122&size=6&diff=WRAP'
+url = 'https://www.brainbashers.com/shownetwork.asp?date=0203&size=6&diff=WRAP'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzlediv'))
 check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr/td/p[2]/a[5]")
@@ -67,8 +67,61 @@ class Network_Puzzle(Puzzle):
 				cell.down = self.cells[self.to_index((y + 1) % self.height, x)]
 				cell.right = self.cells[self.to_index(y, (x + 1) % self.width)]
 				cell.left = self.cells[self.to_index(y, (x - 1) % self.width)]
+	
+	def reset_test_locks(self):
+		for cell in self.cells:
+			cell.test_locked = False
+			cell.test_known_connections = cell.known_connections
+
+	def guess(self):
+		self.reset_test_locks()
+		for cell in self.cells:
+			if cell.count_valid_orientations() == 2:
+
+				for i in range(4):
+					if cell.matched(True):
+						cell.lock(True)
 
 
+						cells_to_test = [cell]
+
+						while len(cells_to_test) > 0:
+
+							current_cell = cells_to_test.pop()
+
+							for neighbor in current_cell.neighbors():
+								if not neighbor.locked and not neighbor.test_locked and neighbor.count_valid_orientations() == 1:
+			
+
+									while not neighbor.matched():
+										neighbor.rotate()
+
+									neighbor.lock(True)
+									cells_to_test.append(neighbor)
+
+								elif neighbor.count_valid_orientations() == 0:
+									print neighbor.y, neighbor.x 
+									print "found contrdiction"
+									print cell.y, cell.x
+									self.reset_test_locks()
+									while not cell.matched(True):
+										cell.rotate()
+									cell.lock()
+									return
+
+
+
+					cell.rotate()
+					self.reset_test_locks()
+
+
+		#look for un locked cells with 2 possiblilties?
+
+		#for each possibility, 'test-lock' the cell and check surrounding cells. if a a surrounding cell has only 1 possibility, 'test-lock' it.
+		#continue until 1: puzzle is solved, 2: a contradiction is reached (a cell has no possible orientation that will work)
+# 1 2
+# found contrdiction
+# 0 2 
 
 
 class Number_Cell(Cell):
@@ -146,6 +199,8 @@ class Number_Cell(Cell):
 
 		self.known_connections = [None, None, None, None]
 		self.locked = False
+		self.test_locked = False
+		self.test_known_connections = [None, None, None, None]
 		self.puzzle = puzzle
 		self.y = y
 		self.x = x
@@ -154,10 +209,12 @@ class Number_Cell(Cell):
 		self.right = None
 		self.left = None
 
+
 	#only applies to unlocked cells
-	def rotate(self):
+	def rotate(self, testing = False):
 		self.state = self.state[1:] + [self.state[0]]
-		html_puzzle[self.y][self.x].click()
+		if not testing:
+			html_puzzle[self.y][self.x].click()
 
 	def opposite_direction(self, index):
 		return (index + 2) % 4
@@ -165,7 +222,12 @@ class Number_Cell(Cell):
 	def neighbors_with_index(self):
 		return [pair for pair in [[self.up, 0], [self.right, 1], [self.down, 2], [self.left, 3]] if pair[0]]
 
-	def lock(self):
+	def lock(self, testing = False):
+		if testing:
+			self.test_locked = True
+			self.update_known_connections(True)
+			return
+
 		if self.locked:
 			return
 		self.locked = True
@@ -183,11 +245,68 @@ class Number_Cell(Cell):
 			if not neighbor.locked:
 				neighbor.check_connections()
 
-	def update_known_connections(self):
+	def update_known_connections(self, testing = False):
 		for neighbor, direction_index in self.neighbors_with_index():
 			if self.known_connections[direction_index] != None:
 				neighbor.known_connections[self.opposite_direction(direction_index)] = self.known_connections[direction_index]
 
+		if testing:
+			for neighbor, direction_index in self.neighbors_with_index():
+				if self.test_known_connections[direction_index] != None:
+					neighbor.test_known_connections[self.opposite_direction(direction_index)] = self.test_known_connections[direction_index]
+
+	def count_valid_orientations(self, testing = False):
+		if self.locked:
+			return 1
+		
+		counter = 0
+		states = []
+
+		if self.type == "line":
+			for i in range(2):
+				if self.matched(testing):
+					counter += 1
+					states.append(self.state)
+				self.rotate(True)
+
+		else: #"split", "turn", "dead"
+			for i in range(4):
+				if self.matched(testing):
+					counter += 1
+					states.append(self.state)
+				self.rotate(True)
+
+		
+		for i in range(4):
+			if sum([state[i] == True for state in states]) == len(states):
+				if not testing:
+					self.known_connections[i] = True
+				else:
+					self.test_known_connections = True
+			elif sum([state[i] == False for state in states]) == len(states):
+				if not testing:
+					self.known_connections[i] = False
+				else:
+					self.test_known_connections = False
+		return counter
+
+	def matched(self, testing = False):
+		for neighbor, i in self.neighbors_with_index():
+
+			if (neighbor.locked or (testing and neighbor.test_locked)):
+				if neighbor.state[(i+2)%4] != self.state[i]:
+					return False
+
+			elif self.known_connections[i] != None:
+				if self.known_connections[i] != self.state[i]:	
+					return False
+
+			elif testing and self.test_known_connections[i] != None:
+				if self.test_known_connections[i] != self.state[i]:	
+					return False
+
+		else:
+			return True
 
 	def check_separate_network(self):
 
@@ -213,10 +332,19 @@ class Number_Cell(Cell):
 					if self.known_connections[direction_index] != True and neighbor.known_connections[self.opposite_direction(direction_index)] != True:
 						self.known_connections[direction_index] = False
 						neighbor.known_connections[self.opposite_direction(direction_index)] = False
+
+		if self.type == "split" and url.split("=")[-1] == "WRAP":
+			for i in range(4):
+				diagonal_neighbor = self.neighbors()[i].neighbors()[(i+1)%4]
+				if diagonal_neighbor.known_connections[(i+2)%4] == True and diagonal_neighbor.known_connections[(i+3)%4] == True:
+					print "found"
+					self.known_connections[(i+2)%4] = True
+					self.known_connections[(i+3)%4] = True
 	
+					self.update_known_connections()
 
 
-
+			
 
 	def connected_neighbors(self):
 		return [neighbor for neighbor, index in self.neighbors_with_index() if self.known_connections[index] == True] 
@@ -256,98 +384,113 @@ class Number_Cell(Cell):
 						self.lock()
 						break
 
+				for i in range(4):
+					if neighbors[i].type == "line" and neighbors[(i+2)%4].type == "dead":
+
+						if neighbors[i].neighbors()[i].type == "dead":
+							if self.state[i] == True:
+								self.rotate()
+							self.lock()
+							break
+
 
 
 	def check_connections(self):
 
 		if not self.locked:
+			if self.count_valid_orientations() == 1:
+				while not self.matched():
+					self.rotate()
+				self.lock()
+				self.update_known_connections()
 
-			#orientation of a line cell can be determined if any connection or non-connection is known
-			if self.type == "line":
-				for i in range(4):
-					if self.known_connections[i] != None:
-						if not self.known_connections[i] == self.state[i]:
-							self.rotate()
-						self.lock()
-						break
 
-			#orientation of a split cell can be determined if location of 1 non-connection is known or if those of 3 connections are known
-			elif self.type == "split":
-				if len([connect for connect in self.known_connections if connect == True]) == 3:
-					for i in range(4):
-						if self.known_connections[i] != True:
-							while self.state[i] != False:
-								self.rotate()
-							self.lock()
-							break
+			# #orientation of a line cell can be determined if any connection or non-connection is known
+			# if self.type == "line":
+			# 	for i in range(4):
+			# 		if self.known_connections[i] != None:
+			# 			if not self.known_connections[i] == self.state[i]:
+			# 				self.rotate()
+			# 			self.lock()
+			# 			break
 
-				else:
-					for i in range(4):
-						if self.known_connections[i] == False:
-							while self.state[i] != False:
-								self.rotate()
-							self.lock()
-							break
+			# #orientation of a split cell can be determined if location of 1 non-connection is known or if those of 3 connections are known
+			# elif self.type == "split":
+			# 	if len([connect for connect in self.known_connections if connect == True]) == 3:
+			# 		for i in range(4):
+			# 			if self.known_connections[i] != True:
+			# 				while self.state[i] != False:
+			# 					self.rotate()
+			# 				self.lock()
+			# 				break
 
-			#similarly, orientation of a deadend cell can be determined if location of 1 connection is known or if those of 3 non-connections are known
-			elif self.type == "dead":
-				if len([connect for connect in self.known_connections if connect == False]) == 3:
-					for i in range(4):
-						if self.known_connections[i] != False:
-							while self.state[i] != True:
-								self.rotate()
-							self.lock()
-							break
+			# 	else:
+			# 		for i in range(4):
+			# 			if self.known_connections[i] == False:
+			# 				while self.state[i] != False:
+			# 					self.rotate()
+			# 				self.lock()
+			# 				break
 
-				else:
-					for i in range(4):
-						if self.known_connections[i] == True:
-							while self.state[i] != True:
-								self.rotate()
-							self.lock()
-							break
+			# #similarly, orientation of a deadend cell can be determined if location of 1 connection is known or if those of 3 non-connections are known
+			# elif self.type == "dead":
+			# 	if len([connect for connect in self.known_connections if connect == False]) == 3:
+			# 		for i in range(4):
+			# 			if self.known_connections[i] != False:
+			# 				while self.state[i] != True:
+			# 					self.rotate()
+			# 				self.lock()
+			# 				break
 
-			elif self.type == "turn":
+			# 	else:
+			# 		for i in range(4):
+			# 			if self.known_connections[i] == True:
+			# 				while self.state[i] != True:
+			# 					self.rotate()
+			# 				self.lock()
+			# 				break
 
-				#orientation is determined if 2 connections are known, or 2 non-connections
-				if len([connect for connect in self.known_connections if connect == False]) == 2:
-					#rotate until correct, lock
-					count = 0
-					while count != 2:
-						self.rotate()
-						count = 0
-						for i in range(4):
-							if self.known_connections[i] == False and self.state[i] == False:
-								count += 1
-					self.lock()
+			# elif self.type == "turn":
 
-				elif len([connect for connect in self.known_connections if connect == True]) == 2:
-					#rotate until correct, lock
-					count = 0
-					while count != 2:
-						self.rotate()
-						count = 0
-						for i in range(4):
-							if self.known_connections[i] == True and self.state[i] == True:
-								count += 1
-					self.lock()
+			# 	#orientation is determined if 2 connections are known, or 2 non-connections
+			# 	if len([connect for connect in self.known_connections if connect == False]) == 2:
+			# 		#rotate until correct, lock
+			# 		count = 0
+			# 		while count != 2:
+			# 			self.rotate()
+			# 			count = 0
+			# 			for i in range(4):
+			# 				if self.known_connections[i] == False and self.state[i] == False:
+			# 					count += 1
+			# 		self.lock()
+
+			# 	elif len([connect for connect in self.known_connections if connect == True]) == 2:
+			# 		#rotate until correct, lock
+			# 		count = 0
+			# 		while count != 2:
+			# 			self.rotate()
+			# 			count = 0
+			# 			for i in range(4):
+			# 				if self.known_connections[i] == True and self.state[i] == True:
+			# 					count += 1
+			# 		self.lock()
 					
 
-				#the location of a connection or non-connection is known, the opposing side must be of the opposite state
-				elif len([connect for connect in self.known_connections if connect == True]) == 1:
-					#change opposite side to non connection
-					for i in range(4):
-						if self.known_connections[i] == True:
-							self.known_connections[(i+2)%4] = False
+			# 	#the location of a connection or non-connection is known, the opposing side must be of the opposite state
+			# 	elif len([connect for connect in self.known_connections if connect == True]) == 1:
+			# 		#change opposite side to non connection
+			# 		for i in range(4):
+			# 			if self.known_connections[i] == True:
+			# 				self.known_connections[(i+2)%4] = False
 
-					self.update_known_connections()
+			# 		self.update_known_connections()
 
-				elif len([connect for connect in self.known_connections if connect == False]) == 1:
-					#change opposite side to connection
-					for i in range(4):
-						if self.known_connections[i] == False:
-							self.known_connections[(i+2)%4] = True
-					self.update_known_connections()
+			# 	elif len([connect for connect in self.known_connections if connect == False]) == 1:
+			# 		#change opposite side to connection
+			# 		for i in range(4):
+			# 			if self.known_connections[i] == False:
+			# 				self.known_connections[(i+2)%4] = True
+			# 		self.update_known_connections()
 
 
 #get puzzle info from webpage
@@ -367,6 +510,7 @@ while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 an
 			c.check_connections()
 			c.check_separate_network()
 			c.check_closed_loop()
+		
 	i+=1
 print i
 
@@ -374,4 +518,7 @@ if browser.find_element_by_id("showtext").text.find("Puzzle Solved") > -1:
 	e()
 
 
+# puzzle.guess()
 
+# puzzle.coord(4,4).known_connections[1] = True
+# puzzle.coord(4,4).update_known_connections()
