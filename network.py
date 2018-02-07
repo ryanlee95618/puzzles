@@ -1,4 +1,4 @@
-import inspect
+import inspect, copy
 from puzzleClass import Puzzle, Cell
 	
 #initiate selenium
@@ -9,7 +9,7 @@ browser = webdriver.Chrome()
 
 #open webpage
 browser.set_window_position(750, 0)
-url = 'https://www.brainbashers.com/shownetwork.asp?date=0203&size=6&diff=WRAP'
+url = 'https://www.brainbashers.com/shownetwork.asp?date=0207&size=12&diff=WRAP'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_id('puzzlediv'))
 check_button = browser.find_element_by_xpath("//*[@id='puzzleContainer']/tbody/tr/td/p[2]/a[5]")
@@ -19,15 +19,27 @@ def e():
 
 class Network_Puzzle(Puzzle):
 
-	def __init__(self, array):
+	def __init__(self, array, puzzle = None):
 
-		self.height = len(array)
-		self.width = len(array[0])
+		
 
 		#initiate cells
-		for y, row, in enumerate(array):
-			for x, element in enumerate(row):
-				self.cells.append(Number_Cell(self, element, y, x))
+
+		if puzzle:
+			self.height = puzzle.height
+			self.width = puzzle.width
+			self.cells = [copy.deepcopy(cell) for cell in puzzle.cells]
+			for cell in self.cells:
+				cell.puzzle = self
+			self.test = True
+		else:
+			self.height = len(array)
+			self.width = len(array[0])
+			self.test = False
+			for y, row, in enumerate(array):
+				for x, element in enumerate(row):
+					self.cells.append(Number_Cell(self, element, y, x))
+
 
 
 		if url.split("=")[-1] == "NOWRAP":
@@ -68,60 +80,43 @@ class Network_Puzzle(Puzzle):
 				cell.right = self.cells[self.to_index(y, (x + 1) % self.width)]
 				cell.left = self.cells[self.to_index(y, (x - 1) % self.width)]
 	
-	def reset_test_locks(self):
-		for cell in self.cells:
-			cell.test_locked = False
-			cell.test_known_connections = cell.known_connections
+	def solve(self):
+		for c in self.cells:
+			if not c.locked:
+				if url.split("=")[-1] == "WRAP":
+					c.starting_cases()
+				c.check_connections()
+				c.check_separate_network()
+				c.check_closed_loop()
+		
+	def find_contradiction(self):
+		for c in self.cells:
+			if c.count_valid_orientations() == 0:
+				return True
+			for neighbor,index in c.neighbors_with_index():
+				if (c.known_connections[index] == True and neighbor.known_connections[(index+2)%4] == False) or (c.known_connections[index] == False and neighbor.known_connections[(index+2)%4] == True):
+					return True
+		else:			
+			return False
 
-	def guess(self):
-		self.reset_test_locks()
+	def run_test(self):
 		for cell in self.cells:
 			if cell.count_valid_orientations() == 2:
 
 				for i in range(4):
-					if cell.matched(True):
-						cell.lock(True)
+					if cell.matched():
 
-
-						cells_to_test = [cell]
-
-						while len(cells_to_test) > 0:
-
-							current_cell = cells_to_test.pop()
-
-							for neighbor in current_cell.neighbors():
-								if not neighbor.locked and not neighbor.test_locked and neighbor.count_valid_orientations() == 1:
-			
-
-									while not neighbor.matched():
-										neighbor.rotate()
-
-									neighbor.lock(True)
-									cells_to_test.append(neighbor)
-
-								elif neighbor.count_valid_orientations() == 0:
-									print neighbor.y, neighbor.x 
-									print "found contrdiction"
-									print cell.y, cell.x
-									self.reset_test_locks()
-									while not cell.matched(True):
-										cell.rotate()
-									cell.lock()
-									return
-
-
-
+						test_copy = Network_Puzzle(None, self)
+						test_copy.coord(cell.y, cell.x).lock()
+						test_copy.solve()
+						if test_copy.find_contradiction():
+							cell.rotate()
+							while not cell.matched():
+								cell.rotate()
+							cell.lock()
+							self.solve()
+							break							
 					cell.rotate()
-					self.reset_test_locks()
-
-
-		#look for un locked cells with 2 possiblilties?
-
-		#for each possibility, 'test-lock' the cell and check surrounding cells. if a a surrounding cell has only 1 possibility, 'test-lock' it.
-		#continue until 1: puzzle is solved, 2: a contradiction is reached (a cell has no possible orientation that will work)
-# 1 2
-# found contrdiction
-# 0 2 
 
 
 class Number_Cell(Cell):
@@ -131,11 +126,6 @@ class Number_Cell(Cell):
 		gif_name = hmtl_cell.find_element_by_tag_name("img").get_attribute("src")[-5:-4]
 		#4 types of cells: dead (end), line, turn, split
 
-		#dead: 1 connection, 3 non-connection
-			#right 	1
-			#up		2
-			#left	4
-			#down	8
 		if gif_name == "1":
 			self.state = [False, True, False, False] #[up, right, down, left]
 			self.type = "dead"
@@ -149,9 +139,6 @@ class Number_Cell(Cell):
 			self.state = [False, False, True, False]
 			self.type = "dead"
 
-		#line: 2 opposing connections, 2 opposing non-connections
-			#right/left 	5
-			#up/down		a
 		elif gif_name == "5":
 			self.state = [False, True, False, True]
 			self.type = "line"
@@ -159,11 +146,6 @@ class Number_Cell(Cell):
 			self.state = [True, False, True, False]
 			self.type = "line"
 
-		#turn: 2 adjacent connections, 2 adjacent non-connections
-			#ur 	3
-			#rd		9
-			#dl		c
-			#lu		6
 		elif gif_name == "3":
 			self.state = [True, True, False, False]
 			self.type = "turn"
@@ -177,11 +159,6 @@ class Number_Cell(Cell):
 			self.state = [True, False, False, True]
 			self.type = "turn"
 
-		#split. 1 non-conncection, 3 connections
-			#right 	e
-			#up		d
-			#left	b
-			#down	7
 		elif gif_name == "e":
 			self.state = [True, False, True, True]
 			self.type = "split"
@@ -199,8 +176,6 @@ class Number_Cell(Cell):
 
 		self.known_connections = [None, None, None, None]
 		self.locked = False
-		self.test_locked = False
-		self.test_known_connections = [None, None, None, None]
 		self.puzzle = puzzle
 		self.y = y
 		self.x = x
@@ -213,7 +188,7 @@ class Number_Cell(Cell):
 	#only applies to unlocked cells
 	def rotate(self, testing = False):
 		self.state = self.state[1:] + [self.state[0]]
-		if not testing:
+		if not testing and not self.puzzle.test:
 			html_puzzle[self.y][self.x].click()
 
 	def opposite_direction(self, index):
@@ -222,19 +197,17 @@ class Number_Cell(Cell):
 	def neighbors_with_index(self):
 		return [pair for pair in [[self.up, 0], [self.right, 1], [self.down, 2], [self.left, 3]] if pair[0]]
 
-	def lock(self, testing = False):
-		if testing:
-			self.test_locked = True
-			self.update_known_connections(True)
-			return
+	def lock(self):
 
 		if self.locked:
 			return
 		self.locked = True
 		self.known_connections = self.state
 		self.update_known_connections()
-		hover = ActionChains(browser).move_to_element(html_puzzle[self.y][self.x]).send_keys(" ")
-		hover.perform()
+
+		if not self.puzzle.test:
+			hover = ActionChains(browser).move_to_element(html_puzzle[self.y][self.x]).send_keys(" ")
+			hover.perform()
 
 		# check_button.click()
 		# if browser.find_element_by_id("showtext").find_element_by_tag_name("span").get_attribute("class") == "sred":
@@ -245,68 +218,10 @@ class Number_Cell(Cell):
 			if not neighbor.locked:
 				neighbor.check_connections()
 
-	def update_known_connections(self, testing = False):
+	def update_known_connections(self):
 		for neighbor, direction_index in self.neighbors_with_index():
 			if self.known_connections[direction_index] != None:
 				neighbor.known_connections[self.opposite_direction(direction_index)] = self.known_connections[direction_index]
-
-		if testing:
-			for neighbor, direction_index in self.neighbors_with_index():
-				if self.test_known_connections[direction_index] != None:
-					neighbor.test_known_connections[self.opposite_direction(direction_index)] = self.test_known_connections[direction_index]
-
-	def count_valid_orientations(self, testing = False):
-		if self.locked:
-			return 1
-		
-		counter = 0
-		states = []
-
-		if self.type == "line":
-			for i in range(2):
-				if self.matched(testing):
-					counter += 1
-					states.append(self.state)
-				self.rotate(True)
-
-		else: #"split", "turn", "dead"
-			for i in range(4):
-				if self.matched(testing):
-					counter += 1
-					states.append(self.state)
-				self.rotate(True)
-
-		
-		for i in range(4):
-			if sum([state[i] == True for state in states]) == len(states):
-				if not testing:
-					self.known_connections[i] = True
-				else:
-					self.test_known_connections = True
-			elif sum([state[i] == False for state in states]) == len(states):
-				if not testing:
-					self.known_connections[i] = False
-				else:
-					self.test_known_connections = False
-		return counter
-
-	def matched(self, testing = False):
-		for neighbor, i in self.neighbors_with_index():
-
-			if (neighbor.locked or (testing and neighbor.test_locked)):
-				if neighbor.state[(i+2)%4] != self.state[i]:
-					return False
-
-			elif self.known_connections[i] != None:
-				if self.known_connections[i] != self.state[i]:	
-					return False
-
-			elif testing and self.test_known_connections[i] != None:
-				if self.test_known_connections[i] != self.state[i]:	
-					return False
-
-		else:
-			return True
 
 	def check_separate_network(self):
 
@@ -337,7 +252,6 @@ class Number_Cell(Cell):
 			for i in range(4):
 				diagonal_neighbor = self.neighbors()[i].neighbors()[(i+1)%4]
 				if diagonal_neighbor.known_connections[(i+2)%4] == True and diagonal_neighbor.known_connections[(i+3)%4] == True:
-					print "found"
 					self.known_connections[(i+2)%4] = True
 					self.known_connections[(i+3)%4] = True
 	
@@ -394,6 +308,48 @@ class Number_Cell(Cell):
 							break
 
 
+	def count_valid_orientations(self):
+		if self.locked:
+			return 1
+		
+		counter = 0
+		states = []
+
+		if self.type == "line":
+			for i in range(2):
+				if self.matched():
+					counter += 1
+					states.append(self.state)
+				self.rotate(True)
+
+		else: #"split", "turn", "dead"
+			for i in range(4):
+				if self.matched():
+					counter += 1
+					states.append(self.state)
+				self.rotate(True)
+
+		
+		for i in range(4):
+			if sum([state[i] == True for state in states]) == len(states):
+				self.known_connections[i] = True
+			elif sum([state[i] == False for state in states]) == len(states):
+				self.known_connections[i] = False
+		return counter
+
+	def matched(self):
+		for neighbor, i in self.neighbors_with_index():
+
+			if neighbor.locked:
+				if neighbor.state[self.opposite_direction(i)] != self.state[i]:
+					return False
+
+			elif self.known_connections[i] != None:
+				if self.known_connections[i] != self.state[i]:	
+					return False
+
+		else:
+			return True
 
 	def check_connections(self):
 
@@ -405,120 +361,23 @@ class Number_Cell(Cell):
 				self.update_known_connections()
 
 
-			# #orientation of a line cell can be determined if any connection or non-connection is known
-			# if self.type == "line":
-			# 	for i in range(4):
-			# 		if self.known_connections[i] != None:
-			# 			if not self.known_connections[i] == self.state[i]:
-			# 				self.rotate()
-			# 			self.lock()
-			# 			break
-
-			# #orientation of a split cell can be determined if location of 1 non-connection is known or if those of 3 connections are known
-			# elif self.type == "split":
-			# 	if len([connect for connect in self.known_connections if connect == True]) == 3:
-			# 		for i in range(4):
-			# 			if self.known_connections[i] != True:
-			# 				while self.state[i] != False:
-			# 					self.rotate()
-			# 				self.lock()
-			# 				break
-
-			# 	else:
-			# 		for i in range(4):
-			# 			if self.known_connections[i] == False:
-			# 				while self.state[i] != False:
-			# 					self.rotate()
-			# 				self.lock()
-			# 				break
-
-			# #similarly, orientation of a deadend cell can be determined if location of 1 connection is known or if those of 3 non-connections are known
-			# elif self.type == "dead":
-			# 	if len([connect for connect in self.known_connections if connect == False]) == 3:
-			# 		for i in range(4):
-			# 			if self.known_connections[i] != False:
-			# 				while self.state[i] != True:
-			# 					self.rotate()
-			# 				self.lock()
-			# 				break
-
-			# 	else:
-			# 		for i in range(4):
-			# 			if self.known_connections[i] == True:
-			# 				while self.state[i] != True:
-			# 					self.rotate()
-			# 				self.lock()
-			# 				break
-
-			# elif self.type == "turn":
-
-			# 	#orientation is determined if 2 connections are known, or 2 non-connections
-			# 	if len([connect for connect in self.known_connections if connect == False]) == 2:
-			# 		#rotate until correct, lock
-			# 		count = 0
-			# 		while count != 2:
-			# 			self.rotate()
-			# 			count = 0
-			# 			for i in range(4):
-			# 				if self.known_connections[i] == False and self.state[i] == False:
-			# 					count += 1
-			# 		self.lock()
-
-			# 	elif len([connect for connect in self.known_connections if connect == True]) == 2:
-			# 		#rotate until correct, lock
-			# 		count = 0
-			# 		while count != 2:
-			# 			self.rotate()
-			# 			count = 0
-			# 			for i in range(4):
-			# 				if self.known_connections[i] == True and self.state[i] == True:
-			# 					count += 1
-			# 		self.lock()
-					
-
-			# 	#the location of a connection or non-connection is known, the opposing side must be of the opposite state
-			# 	elif len([connect for connect in self.known_connections if connect == True]) == 1:
-			# 		#change opposite side to non connection
-			# 		for i in range(4):
-			# 			if self.known_connections[i] == True:
-			# 				self.known_connections[(i+2)%4] = False
-
-			# 		self.update_known_connections()
-
-			# 	elif len([connect for connect in self.known_connections if connect == False]) == 1:
-			# 		#change opposite side to connection
-			# 		for i in range(4):
-			# 			if self.known_connections[i] == False:
-			# 				self.known_connections[(i+2)%4] = True
-			# 		self.update_known_connections()
-
 
 #get puzzle info from webpage
 html_table = browser.find_element_by_id('puzzlediv')
 html_puzzle = [html_row.find_elements_by_tag_name('td') for html_row in html_table.find_elements_by_tag_name('tr')]
-puzzle = Network_Puzzle(html_puzzle)
+p = Network_Puzzle(html_puzzle)
 
 
 i = 0
 while browser.find_element_by_id("showtext").text.find("Puzzle Solved") == -1 and i<20:
-	for c in puzzle.cells:
-		if not c.locked:
-
-			if url.split("=")[-1] == "WRAP":
-				c.starting_cases()
-	
-			c.check_connections()
-			c.check_separate_network()
-			c.check_closed_loop()
-		
+	 	
+	p.solve()
+	p.run_test()
 	i+=1
 print i
 
+
+
+
 if browser.find_element_by_id("showtext").text.find("Puzzle Solved") > -1:
 	e()
-
-
-# puzzle.guess()
-
-# puzzle.coord(4,4).known_connections[1] = True
-# puzzle.coord(4,4).update_known_connections()
