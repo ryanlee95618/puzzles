@@ -4,7 +4,7 @@ browser = webdriver.Chrome()
 
 #open 'root' webpage
 browser.set_window_position(700, 0)
-url = 'https://www.brainbashers.com/showfutoshiki.asp?date=0119&size=5&diff=2'
+url = 'https://www.brainbashers.com/showfutoshiki.asp?date=0209&size=9&diff=1'
 browser.get(url)
 browser.execute_script("return arguments[0].scrollIntoView();", browser.find_element_by_class_name('futoshikitable'))
 
@@ -94,12 +94,20 @@ class Number_Cell(Cell):
 
 	def add_value(self, str):
 		self.value += str
-		rows[self.y][self.x].find_element_by_tag_name("input").send_keys(str)
+		# rows[self.y][self.x].find_element_by_tag_name("input").send_keys(str)
+
+		browser.execute_script("return arguments[0].setRangeText(`${arguments[1]}`);", rows[self.y][self.x].find_element_by_tag_name("input"), str)
 
 	def set_value(self, str):
 		self.value = str
+
 		rows[self.y][self.x].find_element_by_tag_name("input").clear()
-		rows[self.y][self.x].find_element_by_tag_name("input").send_keys(str)
+
+
+		browser.execute_script("return arguments[0].setRangeText(`${arguments[1]}`);", rows[self.y][self.x].find_element_by_tag_name("input"), str)
+
+
+		# rows[self.y][self.x].find_element_by_tag_name("input").send_keys(str)
 
 	def delete_value(self, str):
 		for character in str:
@@ -229,8 +237,8 @@ puzzle = Futoshiki_Puzzle(rows[:-1])
 
 
 
-
-
+# str = 1111
+# browser.execute_script("return arguments[0].setRangeText(`${arguments[1]}`);", rows[0][0].find_element_by_tag_name("input"), str)
 
 
 
@@ -239,6 +247,7 @@ for cell in puzzle.cells:
 	if cell and cell.type == "number":
 		if len(cell.value) != 1:
 			cell.add_value( "".join([str(n) for n in range(1, (puzzle.width+1)/2 +1)]))
+
 
 
 for cell in puzzle.cells:
