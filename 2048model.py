@@ -7,9 +7,10 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 class Game(Puzzle):
 
+
+	size = 4
 	def __init__(self, values = None):
 
-		self.size = 4
 		self.run_browser = True
 		self.browser = None
 		self.height = self.size 
@@ -174,35 +175,24 @@ class Game(Puzzle):
 			for cell in row:
 				cell.value = new_row_values.pop(0)
 
-
-
 		if [cell.value for cell in self.cells] != previous_values:
-			# if not Testing:
 			if not self.test:
 				if self.run_browser:
-					self.keyboard(direction)
-
+					self.press_key(direction)
 				self.add_2()
 				print direction
 			self.update_history()
 			
 			if not self.test:
 				self.show_board()
-				print [c.value for c in self.standard_path(self.size - 1,0)]
-			# self.c()
+				print [c.value for c in self.standard_path()]
 			return True
 
-			# else:
-				
-			# 	test_values = [cell.value for cell in self.cells]
-			# 	for cell in self.cells:
-			# 		cell.value = previous_values.pop(0)
-			# 	return test_values
 
 		else:
 			return False
 
-	def keyboard(self, direction):
+	def press_key(self, direction):
 		body = self.browser.find_element_by_tag_name("body")
 		if direction == "up":
 			body.send_keys("w")
@@ -230,7 +220,7 @@ class Game(Puzzle):
 		for direction in ["left", "right", "down"]:
 			game = Game(current_values)
 			valid_move =game.shift(direction)
-			path_sum = game.standard_path_sum(self.size - 1 , 0)
+			path_sum = game.standard_path_sum()
 			if valid_move:
 				outcomes.append([direction, path_sum, game])
 		return outcomes
@@ -253,7 +243,7 @@ class Game(Puzzle):
 
 		sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
 
-		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path(self.size - 1,0))]
+		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path())]
 
 		valid_move = False
 		outcome_to_try = sorted_outcomes + unblocked_outcomes
@@ -277,7 +267,7 @@ class Game(Puzzle):
 	def automate_move(self):
 
 		#if the path contains any duplicates. combine them.
-		path = self.standard_path(self.size - 1,0)
+		path = self.standard_path()
 
 		for index, cell in enumerate(path[:-1]):
 			next_cell = path[index + 1]
@@ -306,10 +296,8 @@ class Game(Puzzle):
 
 
 
-	def standard_path(self, y, x):
-
-		# only deviate from "standard path" if next cell is larger than current cell not if this a blank
-		#can deviate from path is a cell of equal value is found
+	def standard_path(self, y = size - 1 , x = 0):
+		
 		path = []
 		current_cell = self.coord(y,x)
 		path.append(current_cell)
@@ -318,10 +306,15 @@ class Game(Puzzle):
 
 			options = [current_cell.up, current_cell.right, current_cell.left]
 
-			cells = [cell for cell in options if cell and cell not in path and cell.value <= current_cell.value]
+			cells = [cell for cell in options if cell and cell not in path and cell.value <= current_cell.value] 
 
 			try:
-				current_cell = cells[-1]
+				#can deviate from path is a cell of equal value is found
+				if cells[0].value == current_cell.value:
+					current_cell = cells[0]
+					# print "ASDFASDFASDF"
+				else:
+					current_cell = cells[-1]
 			except:
 				break
 
@@ -329,12 +322,10 @@ class Game(Puzzle):
 				break
 			else:
 				path.append(current_cell)
-
-
 		return path
 
 
-	def standard_path_sum(self, y, x):
+	def standard_path_sum(self, y = size - 1, x = 0):
 		return sum([cell.value if cell.value != None else 0 for cell in self.standard_path(y, x)])
 
 	def q(self):
