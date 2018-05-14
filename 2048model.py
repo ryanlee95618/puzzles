@@ -42,6 +42,9 @@ class Game(Puzzle):
 	def update_history(self):
 		self.history.append([cell.value for cell in self.cells])
 
+	def get_score(self):
+		return max([cell.value for cell in self.cells])
+
 	def open_web_puzzle(self):
 		self.browser = webdriver.Chrome()
 		self.browser.set_window_position(686, 29)
@@ -124,7 +127,6 @@ class Game(Puzzle):
 			for index, cell in enumerate(row[:-1]):
 				if row[index].value == row[index + 1].value:
 					return False
-		print "game over"	
 		return True
 
 	def collapse_row(self, row, reverse):
@@ -169,7 +171,7 @@ class Game(Puzzle):
 				else:
 					word += character
 		return values
-	def undo(self, string):
+	def undo(self, string = None):
 		if string:
 			values = self.get_values(string)
 			for index, cell in enumerate(self.cells):
@@ -201,12 +203,12 @@ class Game(Puzzle):
 				if self.run_browser:
 					self.press_key(direction)
 				self.add_2()
-				print direction
+				# print direction
 			self.update_history()
 			
-			if not self.test:
-				self.show_board()
-				print [c.value for c in self.standard_path()]
+			# if not self.test:
+			# 	# self.show_board()
+			# 	# print [c.value for c in self.standard_path()]
 			return True
 
 
@@ -278,7 +280,12 @@ class Game(Puzzle):
 
 
 
-	def is_blocked(self, path): 
+	def is_blocked(self, path):
+		#make sure there are not duplicates in path first
+		for index, cell in enumerate(path[:-1]):
+			next_cell = path[index + 1]
+			if cell.value == next_cell.value:
+				return False
 		for cell in path[-1].neighbors():
 			if cell.value == None:
 				return False
@@ -309,7 +316,7 @@ class Game(Puzzle):
 							self.shift("left")
 				return
 
-
+		# self.clear_end(path)
 		if self.is_blocked(path):
 			self.clear_end(path)
 		else:
@@ -357,137 +364,144 @@ class Game(Puzzle):
 			self.automate_move()
 			if self.game_over():
 				break
+		return self.get_score()
 		
 
 
-	def top_non_empty_row_at_risk(self):
-		for row in self.rows():
-			row_values = [cell.value for cell in row]
-			if row_values.count(None) < 4:
-				if row_values.count(None) == 1:
-					return True	
-				else:
-					return False	
-		return False
-	def one_option(self):
 
-		if self.shift("down", True) == False and self.shift("left", True) == False:
-			self.shift("right")
 
-		elif self.shift("down", True) == False and self.shift("right", True) == False:
-			self.shift("left")
 
-		elif self.shift("right", True) == False and self.shift("left", True) == False:
-			self.shift("down")
-	def path(self, y, x):
+runs = 10
+total_score = 0.0
+for i in range(runs):
+	print i
+	g = Game()
+	g.new_game()
+	score = g.run()
+	total_score += score
 
-		# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
-		#can deviate from path is a cell of equal value is found
-		path = []
-		current_cell = self.coord(y,x)
-		path.append(current_cell)
+print total_score/runs
 
-		while True:
 
-			options = [current_cell.up, current_cell.right, current_cell.left]
 
-			cells = [cell for cell in options if cell and cell not in path and cell.value != None and cell.value <= current_cell.value]
+	# def top_non_empty_row_at_risk(self):
+	# 	for row in self.rows():
+	# 		row_values = [cell.value for cell in row]
+	# 		if row_values.count(None) < 4:
+	# 			if row_values.count(None) == 1:
+	# 				return True	
+	# 			else:
+	# 				return False	
+	# 	return False
+	# def one_option(self):
 
-			try:
-				current_cell = sorted(cells, key=lambda cell: cell.value)[-1]
-				path.append(current_cell)
-			except:
-				break
+	# 	if self.shift("down", True) == False and self.shift("left", True) == False:
+	# 		self.shift("right")
 
-		return path
-	def automate(self):
+	# 	elif self.shift("down", True) == False and self.shift("right", True) == False:
+	# 		self.shift("left")
+
+	# 	elif self.shift("right", True) == False and self.shift("left", True) == False:
+	# 		self.shift("down")
+	# def path(self, y, x):
+
+	# 	# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
+	# 	#can deviate from path is a cell of equal value is found
+	# 	path = []
+	# 	current_cell = self.coord(y,x)
+	# 	path.append(current_cell)
+
+	# 	while True:
+
+	# 		options = [current_cell.up, current_cell.right, current_cell.left]
+
+	# 		cells = [cell for cell in options if cell and cell not in path and cell.value != None and cell.value <= current_cell.value]
+
+	# 		try:
+	# 			current_cell = sorted(cells, key=lambda cell: cell.value)[-1]
+	# 			path.append(current_cell)
+	# 		except:
+	# 			break
+
+	# 	return path
+	# def automate(self):
 		
-		for i in range(100):
-			if self.game_over():
-				break
-			previous_values = [cell.value for cell in self.cells]
+	# 	for i in range(100):
+	# 		if self.game_over():
+	# 			break
+	# 		previous_values = [cell.value for cell in self.cells]
 
-			self.shift("left")
-			self.shift("down")
-			self.shift("down")
-			self.shift("down")
+	# 		self.shift("left")
+	# 		self.shift("down")
+	# 		self.shift("down")
+	# 		self.shift("down")
 			
 
-			if [cell.value for cell in self.cells] == previous_values:
-				self.shift("right")
+	# 		if [cell.value for cell in self.cells] == previous_values:
+	# 			self.shift("right")
 
 
-				if self.coord(3,0) != None:
-					self.shift("down")
-	def b(self):
-		#
-		outcomes = [self.shift("down", True),
-						self.shift("right", True),
-						self.shift("left", True),
-						self.shift("up", True),
-						]
+	# 			if self.coord(3,0) != None:
+	# 				self.shift("down")
+	# def b(self):
+	# 	#
+	# 	outcomes = [self.shift("down", True),
+	# 					self.shift("right", True),
+	# 					self.shift("left", True),
+	# 					self.shift("up", True),
+	# 					]
 
-		valid_outcomes = [outcome for outcome in outcomes if outcome]
-	def a(self):
+	# 	valid_outcomes = [outcome for outcome in outcomes if outcome]
+	# def a(self):
 
-		#if bottom row in not stable, don't press right
-		bottom_row = [cell.value for cell in self.row(self.size - 1)]
-		if not self.is_stable(bottom_row):
+	# 	#if bottom row in not stable, don't press right
+	# 	bottom_row = [cell.value for cell in self.row(self.size - 1)]
+	# 	if not self.is_stable(bottom_row):
 
-			#if full press left,
-			if self.is_full(bottom_row):
-				if self.shift("down"):
-					return
-				if self.shift("left"):
-					return
-				if self.shift("right"):
-					return
-				if self.shift("up"):
-					return
-
-
-			else: #	if there is a blank space press down until filled or until down is invalid move.
-				if self.coord(self.size - 1,0).value == None and bottom_row.count(None) != 4:
-					self.shift("left")
-				else:
-					if self.shift("down"):
-						return
-					if self.shift("left"):
-						return
-					if self.shift("right"):
-						return
-					if self.shift("up"):
-						return
-
-		else:
-
-			#if bottom row is stable
-			#if right most value in 3rd row is greater then right most value of bottom row, try to 
-
-			# print "BOTTOM ROW STABLE"
-			if self.coord(2,3).value > self.coord(3,3).value:
-				self.shift("left")
-				self.shift("down")
-				self.shift("right")
-			else:
-				if self.shift("down"):
-					return
-				if self.shift("right"):
-					return
-				if self.shift("left"):
-					return
-				if self.shift("up"):
-					return
-
-#ned to fix:
-#             2   
-#         4   2   
-# 2       16  8   
-#     256 16  4   
-# [None]
-# down
+	# 		#if full press left,
+	# 		if self.is_full(bottom_row):
+	# 			if self.shift("down"):
+	# 				return
+	# 			if self.shift("left"):
+	# 				return
+	# 			if self.shift("right"):
+	# 				return
+	# 			if self.shift("up"):
+	# 				return
 
 
+	# 		else: #	if there is a blank space press down until filled or until down is invalid move.
+	# 			if self.coord(self.size - 1,0).value == None and bottom_row.count(None) != 4:
+	# 				self.shift("left")
+	# 			else:
+	# 				if self.shift("down"):
+	# 					return
+	# 				if self.shift("left"):
+	# 					return
+	# 				if self.shift("right"):
+	# 					return
+	# 				if self.shift("up"):
+	# 					return
+
+	# 	else:
+
+	# 		#if bottom row is stable
+	# 		#if right most value in 3rd row is greater then right most value of bottom row, try to 
+
+	# 		# print "BOTTOM ROW STABLE"
+	# 		if self.coord(2,3).value > self.coord(3,3).value:
+	# 			self.shift("left")
+	# 			self.shift("down")
+	# 			self.shift("right")
+	# 		else:
+	# 			if self.shift("down"):
+	# 				return
+	# 			if self.shift("right"):
+	# 				return
+	# 			if self.shift("left"):
+	# 				return
+	# 			if self.shift("up"):
+	# 				return
 
 
 
@@ -504,23 +518,17 @@ class Game(Puzzle):
 
 
 
+# 1:make moves that increase value of last cell
+# 2:make moves than move cells of equal or lesser value compared to last cell adjacent to last cell
+# 3:make moves that move cells of equal or lesser value compared to last cell to same row/column of last cell
 
-		#if not: 
-		# 1:make moves that increase value of last cell
-		# 2:make moves than move cells of equal or lesser value compared to last cell adjacent to last cell
-		# 3:make moves that move cells of equal or lesser value compared to last cell to same row/column of last cell
+#how to keep track of cells when they move?? 
 
-		#how to keep track of cells when they move?? 
-
-a = """            2   
-        4   2   
-2       16  8   
-    256 16  4   """
-g = Game()
-
-g.new_game()
-# g.run()
-
+# a = """            2   
+#         4   2   
+# 2       16  8   
+#     256 16  4   """
+# g.undo(a)
 
 
 
