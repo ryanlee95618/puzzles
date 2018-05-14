@@ -11,7 +11,7 @@ class Game(Puzzle):
 	size = 4
 	def __init__(self, values = None):
 
-		self.run_browser = True
+		self.run_browser = False
 		self.browser = None
 		self.height = self.size 
 		self.width = self.size 
@@ -38,9 +38,6 @@ class Game(Puzzle):
 		if values:
 			for index, cell in enumerate(self.cells):
 				cell.value = values[index]
-
-	def duplicate(self):
-		pass
 
 	def update_history(self):
 		self.history.append([cell.value for cell in self.cells])
@@ -78,6 +75,7 @@ class Game(Puzzle):
 				return [[y,x], value]
 
 
+
 	def new_game(self):
 		self.history = []
 		for cell in self.cells:
@@ -85,6 +83,7 @@ class Game(Puzzle):
 
 		if self.run_browser:
 			self.open_web_puzzle()
+			time.sleep(1)
 			self.getTiles()
 
 		else:
@@ -156,12 +155,34 @@ class Game(Puzzle):
 
 		return row
 
-	def undo(self):
-		values = self.history[-2]
-		for index, cell in enumerate(self.cells):
-			cell.value = values[index]
-		self.history.pop()
+	def get_values(self, string):
+		values = []
+		for row in string.split("\n"):
+			word = ""
+			for index, character in enumerate(row):
+
+				if (index + 1.0)/4 == round((index + 1.0)/4):
+					number = word.strip()
+
+					values.append(None if number == "" else int(number))
+					word = ""
+				else:
+					word += character
+		return values
+	def undo(self, string):
+		if string:
+			values = self.get_values(string)
+			for index, cell in enumerate(self.cells):
+				cell.value = values[index]
+			self.history = []
+		else:
+			old_values = self.history[-2]
+			for index, cell in enumerate(self.cells):
+				cell.value = old_values[index]
+			self.history.pop()
+		
 		self.show_board()
+
 
 	def shift(self, direction, Testing = False):
 		previous_values = [cell.value for cell in self.cells]
@@ -458,7 +479,13 @@ class Game(Puzzle):
 				if self.shift("up"):
 					return
 
-
+#ned to fix:
+#             2   
+#         4   2   
+# 2       16  8   
+#     256 16  4   
+# [None]
+# down
 
 
 
@@ -485,11 +512,14 @@ class Game(Puzzle):
 
 		#how to keep track of cells when they move?? 
 
-
+a = """            2   
+        4   2   
+2       16  8   
+    256 16  4   """
 g = Game()
 
 g.new_game()
-g.run()
+# g.run()
 
 
 
