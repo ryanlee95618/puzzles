@@ -175,27 +175,29 @@ class Game(Puzzle):
 				cell.value = new_row_values.pop(0)
 
 
+
 		if [cell.value for cell in self.cells] != previous_values:
-			if not Testing:
-				if not self.test:
-					if self.run_browser:
-						self.keyboard(direction)
+			# if not Testing:
+			if not self.test:
+				if self.run_browser:
+					self.keyboard(direction)
 
-					self.add_2()
-					print direction
-				self.update_history()
+				self.add_2()
+				print direction
+			self.update_history()
+			
+			if not self.test:
+				self.show_board()
+				print [c.value for c in self.standard_path(self.size - 1,0)]
+			# self.c()
+			return True
+
+			# else:
 				
-				if not self.test:
-					self.show_board()
-					print [c.value for c in self.standard_path(self.size - 1,0)]
-				# self.c()
-				return True
-
-			else:
-				test_values = [cell.value for cell in self.cells]
-				for cell in self.cells:
-					cell.value = previous_values.pop(0)
-				return test_values
+			# 	test_values = [cell.value for cell in self.cells]
+			# 	for cell in self.cells:
+			# 		cell.value = previous_values.pop(0)
+			# 	return test_values
 
 		else:
 			return False
@@ -218,16 +220,6 @@ class Game(Puzzle):
 	def is_full(self, row):
 		return row.count(None) == 0
 
-
-	def top_non_empty_row_at_risk(self):
-		for row in self.rows():
-			row_values = [cell.value for cell in row]
-			if row_values.count(None) < 4:
-				if row_values.count(None) == 1:
-					return True	
-				else:
-					return False	
-		return False
 
 
 
@@ -276,14 +268,13 @@ class Game(Puzzle):
 
 
 	def is_blocked(self, path): 
-		#last cell must be adjacent to empty cell
 		for cell in path[-1].neighbors():
 			if cell.value == None:
 				return False
 		return True
 
 
-	def c(self):
+	def automate_move(self):
 
 		#if the path contains any duplicates. combine them.
 		path = self.standard_path(self.size - 1,0)
@@ -314,45 +305,6 @@ class Game(Puzzle):
 			self.maximize_standard_path_sum()
 
 
-		#if not: 
-		# 1:make moves that increase value of last cell
-		# 2:make moves than move cells of equal or lesser value compared to last cell adjacent to last cell
-		# 3:make moves that move cells of equal or lesser value compared to last cell to same row/column of last cell
-
-		#how to keep track of cells when they move?? 
-
-
-	def one_option(self):
-
-		if self.shift("down", True) == False and self.shift("left", True) == False:
-			self.shift("right")
-
-		elif self.shift("down", True) == False and self.shift("right", True) == False:
-			self.shift("left")
-
-		elif self.shift("right", True) == False and self.shift("left", True) == False:
-			self.shift("down")
-	def path(self, y, x):
-
-		# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
-		#can deviate from path is a cell of equal value is found
-		path = []
-		current_cell = self.coord(y,x)
-		path.append(current_cell)
-
-		while True:
-
-			options = [current_cell.up, current_cell.right, current_cell.left]
-
-			cells = [cell for cell in options if cell and cell not in path and cell.value != None and cell.value <= current_cell.value]
-
-			try:
-				current_cell = sorted(cells, key=lambda cell: cell.value)[-1]
-				path.append(current_cell)
-			except:
-				break
-
-		return path
 
 	def standard_path(self, y, x):
 
@@ -385,9 +337,57 @@ class Game(Puzzle):
 	def standard_path_sum(self, y, x):
 		return sum([cell.value if cell.value != None else 0 for cell in self.standard_path(y, x)])
 
+	def q(self):
+		self.browser.quit()
+
+	def run(self):
+		while True:
+			self.automate_move()
+			if self.game_over():
+				break
+		
 
 
+	def top_non_empty_row_at_risk(self):
+		for row in self.rows():
+			row_values = [cell.value for cell in row]
+			if row_values.count(None) < 4:
+				if row_values.count(None) == 1:
+					return True	
+				else:
+					return False	
+		return False
+	def one_option(self):
 
+		if self.shift("down", True) == False and self.shift("left", True) == False:
+			self.shift("right")
+
+		elif self.shift("down", True) == False and self.shift("right", True) == False:
+			self.shift("left")
+
+		elif self.shift("right", True) == False and self.shift("left", True) == False:
+			self.shift("down")
+	def path(self, y, x):
+
+		# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
+		#can deviate from path is a cell of equal value is found
+		path = []
+		current_cell = self.coord(y,x)
+		path.append(current_cell)
+
+		while True:
+
+			options = [current_cell.up, current_cell.right, current_cell.left]
+
+			cells = [cell for cell in options if cell and cell not in path and cell.value != None and cell.value <= current_cell.value]
+
+			try:
+				current_cell = sorted(cells, key=lambda cell: cell.value)[-1]
+				path.append(current_cell)
+			except:
+				break
+
+		return path
 	def automate(self):
 		
 		for i in range(100):
@@ -468,15 +468,9 @@ class Game(Puzzle):
 					return
 
 
-	def q(self):
-		self.browser.quit()
 
-	def run(self):
-		while True:
-			self.c()
-			if self.game_over():
-				break
-		
+
+
 
 
 #rules:
@@ -489,6 +483,16 @@ class Game(Puzzle):
 
 #generate path until a cell is in a unstable row.
 #try to stablize row..
+
+
+
+
+		#if not: 
+		# 1:make moves that increase value of last cell
+		# 2:make moves than move cells of equal or lesser value compared to last cell adjacent to last cell
+		# 3:make moves that move cells of equal or lesser value compared to last cell to same row/column of last cell
+
+		#how to keep track of cells when they move?? 
 
 
 g = Game()
