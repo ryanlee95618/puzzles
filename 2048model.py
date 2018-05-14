@@ -105,7 +105,7 @@ class Game(Puzzle):
 				[y,x], value = self.get_new_tile()
 
 			except:
-				time.sleep(1)
+				time.sleep(.500)
 				[y,x], value = self.get_new_tile()
 			self.coord(y-1,x-1).value = value
 		else:
@@ -228,111 +228,51 @@ class Game(Puzzle):
 				else:
 					return False	
 		return False
-	def automate(self):
-		
-		for i in range(100):
-			if self.game_over():
-				break
-			previous_values = [cell.value for cell in self.cells]
-
-			self.shift("left")
-			self.shift("down")
-			self.shift("down")
-			self.shift("down")
-			
-
-			if [cell.value for cell in self.cells] == previous_values:
-				self.shift("right")
 
 
-				if self.coord(3,0) != None:
-					self.shift("down")
-	def b(self):
-		#
-		outcomes = [self.shift("down", True),
-						self.shift("right", True),
-						self.shift("left", True),
-						self.shift("up", True),
-						]
-
-		valid_outcomes = [outcome for outcome in outcomes if outcome]
 
 
-	#find way to clear path
-	def maximize_standard_path_sum(self):
+	def get_outcomes(self):
 		current_values = [cell.value for cell in self.cells]
+		outcomes = []
+		for direction in ["left", "right", "down"]:
+			game = Game(current_values)
+			valid_move =game.shift(direction)
+			path_sum = game.standard_path_sum(self.size - 1 , 0)
+			if valid_move:
+				outcomes.append([direction, path_sum, game])
+		return outcomes
 
-		left = Game(current_values)
-		left.shift("left")
-		left_sum = left.standard_path_sum(self.size - 1,0)
+	def maximize_standard_path_sum(self):
+		outcomes = self.get_outcomes()
 
-		right = Game(current_values)
-		right.shift("right")
-		right_sum = right.standard_path_sum(self.size - 1,0)
+		sorted_outcomes = sorted(outcomes, key=lambda outcome: outcome[1])
 
-		down = Game(current_values)
-		down.shift("down")
-		down_sum = down.standard_path_sum(self.size - 1,0)
-
-
-		directions = [(left_sum, "left"), (right_sum, "right"), (down_sum, "down")]
-
-		sorted_directions = sorted(directions, key=lambda pair: pair[0])
-
-		outcome = False
-
-		while outcome == False:
-			if len(sorted_directions) == 0:
+		valid_move = False
+		while not valid_move:
+			if len(sorted_outcomes) == 0:
 				self.shift("up")
 				self.shift("down")
 				break
-			outcome = self.shift(sorted_directions.pop()[1])
-
-
+			valid_move = self.shift(sorted_outcomes.pop()[0])
 
 	def clear_end(self, path):
-		current_values = [cell.value for cell in self.cells]
+		outcomes = self.get_outcomes()
 
-		left = Game(current_values)
-		left.shift("left")
-		left_sum = left.standard_path_sum(self.size - 1,0)
+		sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
 
-		right = Game(current_values)
-		right.shift("right")
-		right_sum = right.standard_path_sum(self.size - 1,0)
+		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path(self.size - 1,0))]
 
-		down = Game(current_values)
-		down.shift("down")
-		down_sum = down.standard_path_sum(self.size - 1,0)
-
-
-
-
-		directions = [(left_sum, "left", left), (right_sum, "right", right), (down_sum, "down", down)]
-
-		sorted_directions = sorted(directions, key=lambda pair: pair[0])
-
-		outcome = False
-		index = 2
-		while outcome == False:
-
-			direction_sum, direction, game = sorted_directions[index]
-			if not self.is_blocked(game.standard_path(self.size - 1,0)):
-				outcome = self.shift(direction)
-
-			index -= 1
-			if index < 0:
+		valid_move = False
+		outcome_to_try = sorted_outcomes + unblocked_outcomes
+		while not valid_move:
+			if len(outcome_to_try) == 0:
+				self.shift("up")
+				self.shift("down")
 				break
 
-		if not outcome:
-			if self.shift("down"):
-				return
-			if self.shift("left"):
-				return
-			if self.shift("right"):
-				return
-			if self.shift("up"):
-				return
+			valid_move = self.shift(outcome_to_try.pop()[0])
+
 
 
 	def is_blocked(self, path): 
@@ -341,7 +281,6 @@ class Game(Puzzle):
 			if cell.value == None:
 				return False
 		return True
-
 
 
 	def c(self):
@@ -376,7 +315,6 @@ class Game(Puzzle):
 
 
 		#if not: 
-		
 		# 1:make moves that increase value of last cell
 		# 2:make moves than move cells of equal or lesser value compared to last cell adjacent to last cell
 		# 3:make moves that move cells of equal or lesser value compared to last cell to same row/column of last cell
@@ -394,8 +332,6 @@ class Game(Puzzle):
 
 		elif self.shift("right", True) == False and self.shift("left", True) == False:
 			self.shift("down")
-
-
 	def path(self, y, x):
 
 		# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
@@ -447,15 +383,39 @@ class Game(Puzzle):
 
 
 	def standard_path_sum(self, y, x):
-
-
 		return sum([cell.value if cell.value != None else 0 for cell in self.standard_path(y, x)])
 
 
 
 
+	def automate(self):
+		
+		for i in range(100):
+			if self.game_over():
+				break
+			previous_values = [cell.value for cell in self.cells]
+
+			self.shift("left")
+			self.shift("down")
+			self.shift("down")
+			self.shift("down")
+			
+
+			if [cell.value for cell in self.cells] == previous_values:
+				self.shift("right")
 
 
+				if self.coord(3,0) != None:
+					self.shift("down")
+	def b(self):
+		#
+		outcomes = [self.shift("down", True),
+						self.shift("right", True),
+						self.shift("left", True),
+						self.shift("up", True),
+						]
+
+		valid_outcomes = [outcome for outcome in outcomes if outcome]
 	def a(self):
 
 		#if bottom row in not stable, don't press right
@@ -506,6 +466,7 @@ class Game(Puzzle):
 					return
 				if self.shift("up"):
 					return
+
 
 	def q(self):
 		self.browser.quit()
