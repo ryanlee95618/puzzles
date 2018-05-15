@@ -1,7 +1,6 @@
 from puzzleClass import Puzzle, Cell
 import random, copy, time
 from selenium import webdriver
-# from selenium.webdriver.common.action_chains import ActionChains
 
 class Game(Puzzle):
 
@@ -9,8 +8,9 @@ class Game(Puzzle):
 	def __init__(self, values = None):
 
 		self.keep_going = True  #play beyond 2048
+		self.run_browser = True
+
 		self.button_dismissed = False
-		self.run_browser = False
 		self.browser = None
 		self.height = self.size 
 		self.width = self.size 
@@ -294,7 +294,7 @@ class Game(Puzzle):
 
 
 
-	def clear_end(self, path):
+	def maximize(self, path):
 		outcomes = self.get_outcomes()
 
 		sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
@@ -309,14 +309,22 @@ class Game(Puzzle):
 			outcome_to_try = sorted_outcomes 
 
 			
-		valid_move = False
-		while not valid_move:
-			if len(outcome_to_try) == 0:
-				self.shift("up")
-				self.shift("down")
-				break
+		if len(outcome_to_try) == 0:
+			self.shift("up")
+			self.shift("down")
+		else:
+			self.shift(outcome_to_try.pop()[0])
 
-			valid_move = self.shift(outcome_to_try.pop()[0])
+
+
+		# valid_move = False
+		# while not valid_move:
+		# 	if len(outcome_to_try) == 0:
+		# 		self.shift("up")
+		# 		self.shift("down")
+		# 		break
+
+		# 	valid_move = self.shift(outcome_to_try.pop()[0])
 
 
 
@@ -356,15 +364,7 @@ class Game(Puzzle):
 							self.shift("left")
 				return
 
-		self.clear_end(path) #average score 1350
-
-		#average score 970
-		# if self.is_blocked(path):
-		# 	self.clear_end(path)
-		# else:
-		# 	self.maximize_standard_path_sum()
-
-
+		self.maximize(path) 
 
 	def standard_path(self, y = size - 1 , x = 0):
 		
@@ -432,7 +432,7 @@ class Game(Puzzle):
 	def run(self):
 		while True:
 			self.automate_move()
-			if self.game_over():
+			if self.game_over():	
 				break
 		return self.get_score()
 
@@ -504,18 +504,35 @@ def run_game(runs = 100):
 
 	return scores
 
-# for i in range(100):
-# 	g = Game()
-# 	g.new_game()
-# 	score = g.run()
-# 	if score<2048:
-# 		g.print_all_history()
-# 		break
+def win_rate():
+	data = run_game()
+	print "Win Rate: " + str(len([score for score in data if score >= 2048])/(len(data)+1.0 - 1.0))
+	print "Average Score: " + str(sum(data)/len(data))
 
-# g = Game()
-# g.new_game()
-# g.run()
-# g.show_board()
+
+	d = {}
+	for score in data:
+		if score in d.keys():
+			d[score] += 1
+		else:
+			d[score] = 1
+	print d
+
+
+def run_until_loss():
+	for i in range(100):
+		g = Game()
+		g.new_game()
+		score = g.run()
+		if score<2048:
+			g.print_all_history()
+			break
+
+# win_rate()
+g = Game()
+g.new_game()
+g.run()
+g.show_board()
 
 
 # a = """2               
@@ -533,25 +550,17 @@ def run_game(runs = 100):
 
 #avoid pressing up!!!!
 
-def win_rate():
-	data = run_game()
-	print "Win Rate: " + str(len([score for score in data if score >= 2048])/(len(data)+1.0 - 1.0))
-	print "Average Score: " + str(sum(data)/len(data))
 
-
-	d = {}
-	for score in data:
-		if score in d.keys():
-			d[score] += 1
-		else:
-			d[score] = 1
-	print d
 
 # win_rate()
 # Win Rate: 0.37
 # Average Score: 1402
 # {2048: 29, 512: 23, 4096: 8, 1024: 34, 256: 6}
 
+
+# Win Rate: 0.53
+# Average Score: 1719
+# {1024: 30, 512: 15, 4096: 12, 128: 1, 256: 1, 2048: 41}
 
 
 
