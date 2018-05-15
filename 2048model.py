@@ -1,16 +1,15 @@
 from puzzleClass import Puzzle, Cell
 import random, copy, time
-
-#initiate selenium
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
+# from selenium.webdriver.common.action_chains import ActionChains
 
 class Game(Puzzle):
-
 
 	size = 4
 	def __init__(self, values = None):
 
+		self.keep_going = True  #play beyond 2048
+		self.button_dismissed = False
 		self.run_browser = False
 		self.browser = None
 		self.height = self.size 
@@ -42,8 +41,26 @@ class Game(Puzzle):
 	def update_history(self):
 		self.history.append([cell.value for cell in self.cells])
 
+
+	def print_all_history(self):
+		for values in self.history:
+			for index, cell in enumerate(self.cells):
+				cell.value = values[index]
+			self.show_board()
+			print [c.value for c in self.standard_path()]
+
 	def get_score(self):
 		return max([cell.value for cell in self.cells])
+
+	def largest_cell(self):
+		max_value = 0
+		max_cell = None
+		for cell in self.cells:
+			if cell.value and cell.value > max_value:
+				max_value = cell.value
+				max_cell = cell
+		return max_cell
+
 
 	def open_web_puzzle(self):
 		self.browser = webdriver.Chrome()
@@ -78,7 +95,6 @@ class Game(Puzzle):
 				return [[y,x], value]
 
 
-
 	def new_game(self):
 		self.history = []
 		for cell in self.cells:
@@ -108,7 +124,7 @@ class Game(Puzzle):
 				[y,x], value = self.get_new_tile()
 
 			except:
-				time.sleep(.500)
+				time.sleep(.200)
 				[y,x], value = self.get_new_tile()
 			self.coord(y-1,x-1).value = value
 		else:
@@ -118,8 +134,17 @@ class Game(Puzzle):
 
 	def game_over(self):
 		for cell in self.cells:
+
 			if cell.value == 2048:
-				return True
+				if self.keep_going:
+					if self.run_browser:
+						if not self.button_dismissed:
+							time.sleep(1.5)
+							self.browser.find_element_by_class_name("keep-playing-button").click()
+							self.button_dismissed = True
+				else:
+					return True
+
 		for cell in self.cells:
 			if cell.value == None:
 				return False
@@ -171,6 +196,7 @@ class Game(Puzzle):
 				else:
 					word += character
 		return values
+
 	def undo(self, string = None):
 		if string:
 			values = self.get_values(string)
@@ -237,39 +263,53 @@ class Game(Puzzle):
 
 
 
-	def get_outcomes(self):
+	def get_outcomes(self, non_standard = False):
 		current_values = [cell.value for cell in self.cells]
 		outcomes = []
 		for direction in ["left", "right", "down"]:
 			game = Game(current_values)
-			valid_move =game.shift(direction)
-			path_sum = game.standard_path_sum()
+			valid_move = game.shift(direction)
+			if non_standard:
+				path_sum = self.path_sum(game.path())
+			else:
+				path_sum = self.path_sum(game.standard_path())
 			if valid_move:
 				outcomes.append([direction, path_sum, game])
 		return outcomes
 
-	def maximize_standard_path_sum(self):
-		outcomes = self.get_outcomes()
 
-		sorted_outcomes = sorted(outcomes, key=lambda outcome: outcome[1])
+#3 directions sorted by standard path sum
 
-		valid_move = False
-		while not valid_move:
-			if len(sorted_outcomes) == 0:
-				self.shift("up")
-				self.shift("down")
-				break
-			valid_move = self.shift(sorted_outcomes.pop()[0])
+#end of path my be blocked/ unblocked
+
+
+#if all outcomes are blockec, use non-standard path.
+
+
+#avoid displacment of largest tile:
+	#avoid pressing up
+		#If up is pressed, press down after
+	#avoid pressing right if bottom row is unstable
+		#if right is pressed, immediatley press left afterwards
+
+
 
 	def clear_end(self, path):
 		outcomes = self.get_outcomes()
 
 		sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
 
-		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path())]
-
-		valid_move = False
+		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path()) and self.path_sum(outcome[2].standard_path() ) != 0]
 		outcome_to_try = sorted_outcomes + unblocked_outcomes
+
+
+		if len(unblocked_outcomes) == 0:
+			outcomes = self.get_outcomes(True)
+			sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
+			outcome_to_try = sorted_outcomes 
+
+			
+		valid_move = False
 		while not valid_move:
 			if len(outcome_to_try) == 0:
 				self.shift("up")
@@ -316,11 +356,13 @@ class Game(Puzzle):
 							self.shift("left")
 				return
 
-		# self.clear_end(path)
-		if self.is_blocked(path):
-			self.clear_end(path)
-		else:
-			self.maximize_standard_path_sum()
+		self.clear_end(path) #average score 1350
+
+		#average score 970
+		# if self.is_blocked(path):
+		# 	self.clear_end(path)
+		# else:
+		# 	self.maximize_standard_path_sum()
 
 
 
@@ -328,6 +370,7 @@ class Game(Puzzle):
 		
 		path = []
 		current_cell = self.coord(y,x)
+		# current_cell = self.largest_cell()
 		path.append(current_cell)
 
 		while True:
@@ -340,7 +383,6 @@ class Game(Puzzle):
 				#can deviate from path is a cell of equal value is found
 				if cells[0].value == current_cell.value:
 					current_cell = cells[0]
-					# print "ASDFASDFASDF"
 				else:
 					current_cell = cells[-1]
 			except:
@@ -350,7 +392,35 @@ class Game(Puzzle):
 				break
 			else:
 				path.append(current_cell)
+
 		return path
+
+
+	def path(self, y = size - 1 , x = 0):
+
+		# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
+		#can deviate from path is a cell of equal value is found
+		path = []
+		current_cell = self.coord(y,x)
+		path.append(current_cell)
+
+		while True:
+
+			options = [current_cell.up, current_cell.right, current_cell.left]
+
+			cells = [cell for cell in options if cell and cell not in path and cell.value != None and cell.value <= current_cell.value]
+
+			try:
+				current_cell = sorted(cells, key=lambda cell: cell.value)[-1]
+				path.append(current_cell)
+			except:
+				break
+
+		return path
+
+
+	def path_sum(self, path):
+		return sum([cell.value if cell.value != None else 0 for cell in path])
 
 
 	def standard_path_sum(self, y = size - 1, x = 0):
@@ -365,143 +435,150 @@ class Game(Puzzle):
 			if self.game_over():
 				break
 		return self.get_score()
-		
 
 
 
 
-
-runs = 10
-total_score = 0.0
-for i in range(runs):
-	print i
-	g = Game()
-	g.new_game()
-	score = g.run()
-	total_score += score
-
-print total_score/runs
+	# def at_risk(self):
 
 
+	# 	#bottom row(s) are full and stable (cant be compressed sideways)
+	# 	rows = self.rows()
+	# 	rows.reverse()
+	# 	unstable_row_found = False
+	# 	for row in rows:
+	# 		values = [c.value for c in row]
 
-	# def top_non_empty_row_at_risk(self):
-	# 	for row in self.rows():
-	# 		row_values = [cell.value for cell in row]
-	# 		if row_values.count(None) < 4:
-	# 			if row_values.count(None) == 1:
-	# 				return True	
-	# 			else:
-	# 				return False	
-	# 	return False
-	# def one_option(self):
+	# 		if not unstable_row_found:
+	# 			if not self.collapse_row(values, False) == values:
+	# 				unstable_row_found = True
 
-	# 	if self.shift("down", True) == False and self.shift("left", True) == False:
-	# 		self.shift("right")
+	# 				for index, cell in enumerate(row[:-1]):
+	# 					if cell.value == row[index+1].value:
+	# 						return False
 
-	# 	elif self.shift("down", True) == False and self.shift("right", True) == False:
-	# 		self.shift("left")
+	# 				#partially filled row with 3 cells and 1 blank cell.
+	# 				if not values.count(None) == 1:
+	# 					return False
+	# 				else:
+	# 				#blank cell is NOT adjacent to both a 2 and a 4
+	# 					blank_cell = [cell for cell in row if cell.value == None][0]
+	# 					two_found = False
+	# 					four_found = False
+	# 					for cell in blank_cell.neighbors():
+	# 						if cell.value == 2:
+	# 							two_found = True
+	# 						elif cell.value == 4:
+	# 							four_found = True
 
-	# 	elif self.shift("right", True) == False and self.shift("left", True) == False:
-	# 		self.shift("down")
-	# def path(self, y, x):
-
-	# 	# only deviate from "standard path" if next cell is larger than current cell not if this a blank??!?! YES
-	# 	#can deviate from path is a cell of equal value is found
-	# 	path = []
-	# 	current_cell = self.coord(y,x)
-	# 	path.append(current_cell)
-
-	# 	while True:
-
-	# 		options = [current_cell.up, current_cell.right, current_cell.left]
-
-	# 		cells = [cell for cell in options if cell and cell not in path and cell.value != None and cell.value <= current_cell.value]
-
-	# 		try:
-	# 			current_cell = sorted(cells, key=lambda cell: cell.value)[-1]
-	# 			path.append(current_cell)
-	# 		except:
-	# 			break
-
-	# 	return path
-	# def automate(self):
-		
-	# 	for i in range(100):
-	# 		if self.game_over():
-	# 			break
-	# 		previous_values = [cell.value for cell in self.cells]
-
-	# 		self.shift("left")
-	# 		self.shift("down")
-	# 		self.shift("down")
-	# 		self.shift("down")
-			
-
-	# 		if [cell.value for cell in self.cells] == previous_values:
-	# 			self.shift("right")
-
-
-	# 			if self.coord(3,0) != None:
-	# 				self.shift("down")
-	# def b(self):
-	# 	#
-	# 	outcomes = [self.shift("down", True),
-	# 					self.shift("right", True),
-	# 					self.shift("left", True),
-	# 					self.shift("up", True),
-	# 					]
-
-	# 	valid_outcomes = [outcome for outcome in outcomes if outcome]
-	# def a(self):
-
-	# 	#if bottom row in not stable, don't press right
-	# 	bottom_row = [cell.value for cell in self.row(self.size - 1)]
-	# 	if not self.is_stable(bottom_row):
-
-	# 		#if full press left,
-	# 		if self.is_full(bottom_row):
-	# 			if self.shift("down"):
-	# 				return
-	# 			if self.shift("left"):
-	# 				return
-	# 			if self.shift("right"):
-	# 				return
-	# 			if self.shift("up"):
-	# 				return
-
-
-	# 		else: #	if there is a blank space press down until filled or until down is invalid move.
-	# 			if self.coord(self.size - 1,0).value == None and bottom_row.count(None) != 4:
-	# 				self.shift("left")
-	# 			else:
-	# 				if self.shift("down"):
-	# 					return
-	# 				if self.shift("left"):
-	# 					return
-	# 				if self.shift("right"):
-	# 					return
-	# 				if self.shift("up"):
-	# 					return
-
-	# 	else:
-
-	# 		#if bottom row is stable
-	# 		#if right most value in 3rd row is greater then right most value of bottom row, try to 
-
-	# 		# print "BOTTOM ROW STABLE"
-	# 		if self.coord(2,3).value > self.coord(3,3).value:
-	# 			self.shift("left")
-	# 			self.shift("down")
-	# 			self.shift("right")
+	# 					if two_found and four_found:
+	# 						return False	
+					
 	# 		else:
-	# 			if self.shift("down"):
-	# 				return
-	# 			if self.shift("right"):
-	# 				return
-	# 			if self.shift("left"):
-	# 				return
-	# 			if self.shift("up"):
-	# 				return
+	# 			#rest of the rows are empty
+	# 			if not sum([value == None for value in values]) == len(values):
+	# 				return False
+	# 	for column in self.columns():
+	# 		values = [c.value for c in column]
+	# 		if self.collapse_row(values, True) != values:
+	# 			return False
+
+
+	# 	return True
+
+		
+	# 	#no cells can be compressed vertically down
+
+
+
+
+
+def run_game(runs = 100):
+
+	scores = []
+	for i in range(runs):
+		g = Game()
+		g.new_game()
+		score = g.run()
+		scores.append(score)
+
+	return scores
+
+# for i in range(100):
+# 	g = Game()
+# 	g.new_game()
+# 	score = g.run()
+# 	if score<2048:
+# 		g.print_all_history()
+# 		break
+
+# g = Game()
+# g.new_game()
+# g.run()
+# g.show_board()
+
+
+# a = """2               
+# 4       16  4   
+# 8   16  32  8   
+# 2   512 8   4   """
+
+# g.undo(a)
+# 
+
+# print g.at_risk()
+
+
+#if a 'tumor' grows too large, larger than 64, then don't use standard path
+
+#avoid pressing up!!!!
+
+def win_rate():
+	data = run_game()
+	print "Win Rate: " + str(len([score for score in data if score >= 2048])/(len(data)+1.0 - 1.0))
+	print "Average Score: " + str(sum(data)/len(data))
+
+
+	d = {}
+	for score in data:
+		if score in d.keys():
+			d[score] += 1
+		else:
+			d[score] = 1
+	print d
+
+# win_rate()
+# Win Rate: 0.37
+# Average Score: 1402
+# {2048: 29, 512: 23, 4096: 8, 1024: 34, 256: 6}
+
+
+
+
+#gets 2048 32% of time
+
+#goal get average score over 2048!!!
+#improve time effeciency!!
+
+#whyy?!
+"""
+2   4   2       
+4   2   8       
+8   16  64  4   
+1024512     2   
+[1024, 512]
+2   4   2       
+4   2   8   2   
+8   16  64  4   
+1024512 2   
+"""
+
+
+
+
+
+
+
 
 
 
