@@ -8,7 +8,9 @@ class Game(Puzzle):
 	def __init__(self, values = None):
 
 		self.keep_going = True  #play beyond 2048
-		self.run_browser = True
+		self.run_browser = False
+		if self.run_browser:
+			self.size = 4
 
 		self.button_dismissed = False
 		self.browser = None
@@ -114,7 +116,7 @@ class Game(Puzzle):
 		for row in self.rows():
 			s = ""
 			for number in [str(cell.value) if cell.value != None else " " for cell in row]:
-				number += (4 - len(number))*" "
+				number += (5 - len(number))*" "
 				s += number
 			print s
 
@@ -187,14 +189,14 @@ class Game(Puzzle):
 		for row in string.split("\n"):
 			word = ""
 			for index, character in enumerate(row):
-
-				if (index + 1.0)/4 == round((index + 1.0)/4):
+				print word
+				word += character
+				if (index + 1.0)/5 == round((index + 1.0)/5):
 					number = word.strip()
 
 					values.append(None if number == "" else int(number))
 					word = ""
-				else:
-					word += character
+
 		return values
 
 	def undo(self, string = None):
@@ -228,6 +230,13 @@ class Game(Puzzle):
 			if not self.test:
 				if self.run_browser:
 					self.press_key(direction)
+
+
+				
+				
+				# self.show_board()
+				# print self.at_risk()
+
 				self.add_2()
 				# print direction
 			self.update_history()
@@ -299,7 +308,7 @@ class Game(Puzzle):
 
 		sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
 
-		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path()) and self.path_sum(outcome[2].standard_path() ) != 0]
+		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path()) and self.path_sum(outcome[2].standard_path()) != 0 and not outcome[2].at_risk()]
 		outcome_to_try = sorted_outcomes + unblocked_outcomes
 
 
@@ -439,55 +448,59 @@ class Game(Puzzle):
 
 
 
-	# def at_risk(self):
+	def at_risk(self):
 
 
-	# 	#bottom row(s) are full and stable (cant be compressed sideways)
-	# 	rows = self.rows()
-	# 	rows.reverse()
-	# 	unstable_row_found = False
-	# 	for row in rows:
-	# 		values = [c.value for c in row]
+		#bottom row(s) are full and stable (cant be compressed sideways)
+		rows = self.rows()
+		rows.reverse()
+		unstable_row_found = False
+		for row in rows:
+			values = [c.value for c in row]
 
-	# 		if not unstable_row_found:
-	# 			if not self.collapse_row(values, False) == values:
-	# 				unstable_row_found = True
+			if not unstable_row_found:
+				if not self.collapse_row(values, False) == self.collapse_row(values, True):
+					unstable_row_found = True
 
-	# 				for index, cell in enumerate(row[:-1]):
-	# 					if cell.value == row[index+1].value:
-	# 						return False
+					for index, cell in enumerate(row[:-1]):
+						if cell.value == row[index+1].value:
+							return False
 
-	# 				#partially filled row with 3 cells and 1 blank cell.
-	# 				if not values.count(None) == 1:
-	# 					return False
-	# 				else:
-	# 				#blank cell is NOT adjacent to both a 2 and a 4
-	# 					blank_cell = [cell for cell in row if cell.value == None][0]
-	# 					two_found = False
-	# 					four_found = False
-	# 					for cell in blank_cell.neighbors():
-	# 						if cell.value == 2:
-	# 							two_found = True
-	# 						elif cell.value == 4:
-	# 							four_found = True
+					#partially filled row with 3 cells and 1 blank cell.
+					if not values.count(None) == 1:
+						return False
+					else:
+					#blank cell is NOT adjacent to both a 2 and a 4
+						blank_cell = [cell for cell in row if cell.value == None][0]
+						two_found = False
+						four_found = False
+						for cell in blank_cell.neighbors():
+							if cell.value == 2:
+								two_found = True
+							elif cell.value == 4:
+								four_found = True
 
-	# 					if two_found and four_found:
-	# 						return False	
+						if two_found and four_found:
+							return False	
 					
-	# 		else:
-	# 			#rest of the rows are empty
-	# 			if not sum([value == None for value in values]) == len(values):
-	# 				return False
-	# 	for column in self.columns():
-	# 		values = [c.value for c in column]
-	# 		if self.collapse_row(values, True) != values:
-	# 			return False
+			else:
+				#rest of the rows are empty
+				if not sum([value == None for value in values]) == len(values):
+					return False
 
+		#no cells can be compressed vertically down
+		for column in self.columns():
+			values = [c.value for c in column]
+			if self.collapse_row(values, True) != values:
+				return False
 
-	# 	return True
+		if not unstable_row_found:
+			return False
+		else:
+			return True
 
 		
-	# 	#no cells can be compressed vertically down
+		
 
 
 
@@ -528,28 +541,14 @@ def run_until_loss():
 			g.print_all_history()
 			break
 
-# win_rate()
-g = Game()
-g.new_game()
-g.run()
-g.show_board()
-
-
-# a = """2               
-# 4       16  4   
-# 8   16  32  8   
-# 2   512 8   4   """
-
-# g.undo(a)
-# 
-
-# print g.at_risk()
+win_rate()
+# g = Game()
+# g.new_game()
+# g.run()
+# g.show_board()
 
 
 #if a 'tumor' grows too large, larger than 64, then don't use standard path
-
-#avoid pressing up!!!!
-
 
 
 # win_rate()
@@ -563,11 +562,13 @@ g.show_board()
 # {1024: 30, 512: 15, 4096: 12, 128: 1, 256: 1, 2048: 41}
 
 
-
-#gets 2048 32% of time
+# Win Rate: 0.54
+# Average Score: 1990
+# {2048: 32, 4096: 21, 1024: 33, 8192: 1, 128: 1, 256: 3, 512: 9}
 
 #goal get average score over 2048!!!
 #improve time effeciency!!
+
 
 #whyy?!
 """
@@ -583,8 +584,10 @@ g.show_board()
 """
 
 
-
-
+# 2   2           
+# 4   8   2       
+# 2   16  8       
+# 4096204810248   
 
 
 
@@ -607,19 +610,6 @@ g.show_board()
 # 1:make moves that increase value of last cell
 # 2:make moves than move cells of equal or lesser value compared to last cell adjacent to last cell
 # 3:make moves that move cells of equal or lesser value compared to last cell to same row/column of last cell
-
-#how to keep track of cells when they move?? 
-
-# a = """            2   
-#         4   2   
-# 2       16  8   
-#     256 16  4   """
-# g.undo(a)
-
-
-
-
-
 
 
 
