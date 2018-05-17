@@ -44,6 +44,13 @@ class Game(Puzzle):
 		self.history.append([cell.value for cell in self.cells])
 
 
+	# def print_errors(self):
+	# 	for values in self.history:
+	# 		if values.index(max(values)) != 12:
+	# 			for index, cell in enumerate(self.cells):
+	# 				cell.value = values[index]
+	# 			self.show_board()
+
 	def print_all_history(self):
 		for values in self.history:
 			for index, cell in enumerate(self.cells):
@@ -189,7 +196,7 @@ class Game(Puzzle):
 		for row in string.split("\n"):
 			word = ""
 			for index, character in enumerate(row):
-				print word
+				
 				word += character
 				if (index + 1.0)/5 == round((index + 1.0)/5):
 					number = word.strip()
@@ -308,14 +315,20 @@ class Game(Puzzle):
 
 		sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
 
+		sorted_outcomes = [outcome for outcome in sorted_outcomes if not outcome[2].at_risk()]
+
 		unblocked_outcomes = [outcome for outcome in sorted_outcomes if not self.is_blocked(outcome[2].standard_path()) and self.path_sum(outcome[2].standard_path()) != 0 and not outcome[2].at_risk()]
+
 		outcome_to_try = sorted_outcomes + unblocked_outcomes
+
 
 
 		if len(unblocked_outcomes) == 0:
 			outcomes = self.get_outcomes(True)
 			sorted_outcomes = sorted(outcomes, key=lambda pair: pair[1])
-			outcome_to_try = sorted_outcomes 
+			outcome_to_try = sorted_outcomes
+			#[outcome for outcome in sorted_outcomes if not outcome[2].at_risk()]
+
 
 			
 		if len(outcome_to_try) == 0:
@@ -325,16 +338,7 @@ class Game(Puzzle):
 			self.shift(outcome_to_try.pop()[0])
 
 
-
-		# valid_move = False
-		# while not valid_move:
-		# 	if len(outcome_to_try) == 0:
-		# 		self.shift("up")
-		# 		self.shift("down")
-		# 		break
-
-		# 	valid_move = self.shift(outcome_to_try.pop()[0])
-
+		#if number of pices not in path is greater than number of pieces in path and number of blank spaces < 4
 
 
 	def is_blocked(self, path):
@@ -350,6 +354,9 @@ class Game(Puzzle):
 
 
 	def automate_move(self):
+		#[direction, path_sum, game])
+		 #["left", "right", "down"]
+		outcomes = self.get_outcomes()
 
 		#if the path contains any duplicates. combine them.
 		path = self.standard_path()
@@ -358,19 +365,39 @@ class Game(Puzzle):
 			next_cell = path[index + 1]
 			if cell.value == next_cell.value:
 				if cell.x == next_cell.x: #cells in same column
-					self.shift("down")
+
+					if not outcomes[-1][2].at_risk():
+						self.shift("down")
+					else:
+						break
 				else: #same row
 
 					# check to make sure startin cell is stable before
 					#make sure all preceeding cells are stable
 					if cell.right == next_cell:
-						self.shift("left")
+						if not outcomes[0][2].at_risk():
+							self.shift("left")
+						else:
+							break
+
 					elif cell.left == next_cell:
 						bottom_row = [cell.value for cell in self.row(self.size - 1)]
 						if self.is_stable(bottom_row):
-							self.shift("right")
+							if outcomes[1][0] == "right":
+								if not outcomes[1][2].at_risk():
+									self.shift("right")
+								else:
+									break
+							elif outcomes[0][0] == "right":
+								if not outcomes[0][2].at_risk():
+									self.shift("right")
+								else:
+									break
 						else:
-							self.shift("left")
+							if not outcomes[0][2].at_risk():
+								self.shift("left")
+							else:
+								break
 				return
 
 		self.maximize(path) 
@@ -379,7 +406,6 @@ class Game(Puzzle):
 		
 		path = []
 		current_cell = self.coord(y,x)
-		# current_cell = self.largest_cell()
 		path.append(current_cell)
 
 		while True:
@@ -441,6 +467,7 @@ class Game(Puzzle):
 	def run(self):
 		while True:
 			self.automate_move()
+			# self.maximize(self.standard_path())
 			if self.game_over():	
 				break
 		return self.get_score()
@@ -510,6 +537,7 @@ def run_game(runs = 100):
 
 	scores = []
 	for i in range(runs):
+		print i
 		g = Game()
 		g.new_game()
 		score = g.run()
@@ -537,10 +565,10 @@ def run_until_loss():
 		g = Game()
 		g.new_game()
 		score = g.run()
-		if score<2048:
+		if score<=512:
 			g.print_all_history()
 			break
-
+# run_until_loss()
 win_rate()
 # g = Game()
 # g.new_game()
@@ -566,6 +594,12 @@ win_rate()
 # Average Score: 1990
 # {2048: 32, 4096: 21, 1024: 33, 8192: 1, 128: 1, 256: 3, 512: 9}
 
+
+# Win Rate: 0.53
+# Average Score: 2035
+# {4096: 22, 2048: 30, 8192: 1, 256: 1, 512: 7, 1024: 39}
+
+
 #goal get average score over 2048!!!
 #improve time effeciency!!
 
@@ -590,6 +624,45 @@ win_rate()
 # 4096204810248   
 
 
+
+# g = Game()
+# g.new_game()
+
+# a = """2              2    
+#      4    8    2    
+# 2    16   32   8    
+# 512  256  128  64   """
+
+# g.undo(a)
+
+
+'''
+2              2    
+     4    8    2    
+2    16   32   8    
+512  256  128  64   
+[512, 256, 128, 64, 8, 2, 2]
+                    
+2    4    8    4    
+4    16   32   8    
+512  256  128  64   
+[512, 256, 128, 64, 8, 4]
+
+'''
+
+'''
+4         4         
+4    8              
+4    16   64   128  
+4096 2048 512  256  
+[4096, 2048, 512, 256, 128, 64, 16, 4, 4, 4]
+                    
+4    8    4    2    
+8    16   64   128  
+4096 2048 512  256 
+'''
+
+#when merging adjacent duplicate-valued-cells in path, make sure the move will not put puzzle at risk of being forced to press up!!!!!
 
 
 
